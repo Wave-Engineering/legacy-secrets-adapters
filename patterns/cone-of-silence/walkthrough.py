@@ -40,17 +40,9 @@ def _reader_fatal(path):
 
 _LS = """total 88
 drwxr-xr-x 3 you you  4096 Jan  1 09:00 .
-drwxr-xr-x 4 you you  4096 Jan  1 09:00 ..
--rw-r--r-- 1 you you   140 Jan  1 09:00 .gitignore
--rw-r--r-- 1 you you  1820 Jan  1 09:00 BACKLOG.md
--rw-r--r-- 1 you you 11402 Jan  1 09:00 NOTES.md
--rw-r--r-- 1 you you  4011 Jan  1 09:00 README.md
--r-------- 1 you you    44 Jan  1 09:00 cone.key
 -rwxr-xr-x 1 you you  5102 Jan  1 09:00 cone.py
--rw-r--r-- 1 you you 21044 Jan  1 09:00 deck.html
 -rwxr-xr-x 1 you you  9120 Jan  1 09:00 demonstrate.py
 -rw-r--r-- 1 you you 12880 Jan  1 09:00 enlighten.html
-drwx------ 2 you you  4096 Jan  1 09:00 legacy-etc
 -rwxr-xr-x 1 you you  1903 Jan  1 09:00 legacy_reader.py
 -rw-r--r-- 1 you you   228 Jan  1 09:00 secrets.json.enc
 -rw-r--r-- 1 you you  3650 Jan  1 09:00 walkthrough.py"""
