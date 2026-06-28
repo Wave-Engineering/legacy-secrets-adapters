@@ -1,0 +1,6 @@
+# Runtime artifacts produced by the demo — never commit. The demo regenerates them.
+cone.key
+secrets.json.enc
+secrets.json
+legacy-etc/
+__pycache__/

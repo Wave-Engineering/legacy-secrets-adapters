@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cone of Silence — a legacy-secrets adapter pattern</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code, .mono { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; color:#58a6ff; text-decoration:none; }
+  a { color: #58a6ff; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1rem 1.2rem; }
+  .card.bad { border-color: #f8514955; } .card.good { border-color: #2ea04355; }
+  .card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+  .bad h3 { color: #ff7b72; } .good h3 { color: #7ee787; }
+  .pill { display:inline-block; background:#21262d; border:1px solid #30363d; border-radius:999px;
+          padding:.15rem .7rem; font-size:.8rem; color:#8b949e; margin-right:.4rem; }
+
+  /* side-by-side block diagrams */
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.9rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.bad  { border-color:#f85149; background:#2b1718; color:#ffa198; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.link { border-style:dashed; border-color:#58a6ff; color:#a5d6ff; }
+  .box.dim  { color:#8b949e; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+  .cone { width:100%; max-width:300px; border:1.5px dashed #d2a8ff; border-radius:10px;
+          padding:1.4rem .5rem .7rem; position:relative; margin:.15rem 0; }
+  .cone-label { position:absolute; top:-.7rem; left:50%; transform:translateX(-50%); background:#0f141b;
+                padding:0 .5rem; font-size:.72rem; color:#d2a8ff; white-space:nowrap; }
+  .note { color:#8b949e; font-size:.9rem; margin:.8rem .2rem 0; }
+
+  pre { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:1rem; overflow-x:auto; font-size:.92rem; }
+
+  /* mitigation cards with pros/cons */
+  .miti { background:#0f141b; border:1px solid #30363d; border-left:3px solid #d2a8ff;
+          border-radius:8px; padding:.85rem 1.1rem; margin:.9rem 0; }
+  .miti h3 { margin:0 0 .3rem; color:#d2a8ff; font-size:1.08rem; }
+  .miti > p { margin:.2rem 0 .7rem; }
+  .pc { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; }
+  @media (max-width:680px){ .pc{ grid-template-columns:1fr; } }
+  .pc ul { margin:0; padding-left:0; font-size:.9rem; }
+  .pc li { list-style:none; position:relative; padding-left:1.4rem; margin:.15rem 0; color:#c9d1d9; }
+  .pros li::before { content:"✓"; position:absolute; left:0; color:#7ee787; }
+  .cons li::before { content:"✗"; position:absolute; left:0; color:#ff7b72; }
+
+  ul.writes { padding-left:0; }
+  ul.writes li { list-style:none; background:#161b22; border:1px solid #30363d; border-radius:8px;
+                 padding:.6rem .9rem; margin:.5rem 0; }
+  ul.writes em { color:#8b949e; font-style:normal; }
+
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The Cone of Silence</h1>
+  <p class="sub mono">a legacy-secrets adapter pattern &nbsp;·&nbsp; “a low-effort, RAM-only zone your secret never leaves”</p>
+
+  <p class="lead">The secret is never <em>stored</em> in the clear — it is only ever briefly <em>shown</em>.</p>
+
+  <nav>
+    <a href="#problem">The problem</a>
+    <a href="#idea">The idea</a>
+    <a href="#transparency">Transparency in Secrecy</a>
+    <a href="#writes">What about writes?</a>
+    <a href="#prod">In production</a>
+  </nav>
+
+  <h2 id="problem">The problem</h2>
+  <p>A legacy application reads its credentials from a plaintext file on disk — say
+     <code>/etc/secrets.json</code>. Anyone who can read that disk — another process, a backup, a
+     container image layer, a stray <code>git&nbsp;add</code>, a stolen drive — gets the password.
+     And the fix can't change the application: it is not going to be re-released.</p>
+
+  <h2 id="idea">The idea, side by side</h2>
+  <p>Keep the app's file at the path it always read. Just change what is <em>behind</em> that path.</p>
+  <div class="diagrams">
+    <figure class="panel">
+      <figcaption>① Legacy access — today</figcaption>
+      <div class="flow">
+        <div class="box">legacy app</div>
+        <div class="arrow">↓<span>open("/etc/secrets.json")</span></div>
+        <div class="box bad">/etc/secrets.json<small>PLAINTEXT · on disk</small></div>
+      </div>
+      <p class="note">Copyable, lands in backups, shows up in <code>grep</code>. Whoever reads the
+         disk reads the password.</p>
+    </figure>
+
+    <figure class="panel">
+      <figcaption>② Behind the Cone of Silence</figcaption>
+      <div class="flow">
+        <div class="box">legacy app<small>unchanged</small></div>
+        <div class="arrow">↓<span>open("/etc/secrets.json") — same call</span></div>
+        <div class="box link">/etc/secrets.json<small>symlink ⤳</small></div>
+        <div class="arrow">↓<span>resolves into RAM</span></div>
+        <div class="cone">
+          <span class="cone-label">Cone of Silence · tmpfs (RAM)</span>
+          <div class="box good">/run/cone/secrets.json<small>PLAINTEXT · in memory only</small></div>
+        </div>
+        <div class="arrow">↑<span>decrypt · key from TPM / OpenBao</span></div>
+        <div class="box dim">secrets.json.enc<small>ciphertext · on disk</small></div>
+      </div>
+      <p class="note">Same syscall, same path — only what's <em>behind</em> the path changed. The
+         cleartext lives only in RAM; the disk holds ciphertext.</p>
+    </figure>
+  </div>
+
+  <div class="grid">
+    <div class="card bad"><h3>On disk</h3>
+      <p><span class="pill">permanent</span><span class="pill">copyable</span>
+         Only <strong>ciphertext</strong> lives here. To a thief it's gibberish.</p></div>
+    <div class="card good"><h3>In RAM (tmpfs)</h3>
+      <p><span class="pill">momentary</span><span class="pill">gone on power-off</span>
+         The <strong>plaintext</strong> appears only here, only while the app needs it.</p></div>
+  </div>
+
+  <h2 id="transparency">Appendix — Transparency in Secrecy</h2>
+  <p>RAM is not a vault. A plaintext file in <code>tmpfs</code> is still readable by <code>root</code>,
+     by anything that can <code>ptrace</code> the reader or peek at <code>/proc/&lt;pid&gt;/mem</code>,
+     by processes that share its mount namespace — and it can leak to swap or a core dump. Being honest
+     about that is the point. Each avenue has a mitigation, and they layer:</p>
+
+  <div class="miti">
+    <h3>Temporal mounting</h3>
+    <p>Populate the Cone only for the brief window the app actually needs the secret — decrypt in,
+       let it read, wipe out — so the plaintext exists for seconds, not for the process's whole life.</p>
+    <div class="pc">
+      <ul class="pros"><li>Smallest possible exposure window</li><li>Most of the time there is simply nothing to read</li></ul>
+      <ul class="cons"><li>Must orchestrate the timing precisely</li><li>Breaks if the app re-reads or holds the file open</li></ul>
+    </div>
+  </div>
+
+  <div class="miti">
+    <h3>Dedicated user</h3>
+    <p>Run the reader as its own service account; the Cone file is mode <code>0400</code> owned by that
+       uid, so other users and other services simply cannot read it.</p>
+    <div class="pc">
+      <ul class="pros"><li>Simple, standard, least-privilege</li><li>Stops every non-root neighbor cold</li></ul>
+      <ul class="cons"><li><code>root</code> can still read it</li><li>Doesn't stop privileged <code>ptrace</code>; needs the account provisioned</li></ul>
+    </div>
+  </div>
+
+  <div class="miti">
+    <h3>systemd sandboxing</h3>
+    <p>Lock the service down declaratively: <code>ProtectSystem=strict</code>, <code>ProtectHome</code>,
+       <code>PrivateTmp</code>, <code>NoNewPrivileges</code>, <code>ProtectProc=invisible</code>,
+       <code>InaccessiblePaths=</code>, <code>RestrictAddressFamilies=</code>. Even a compromised neighbor
+       service can't reach the secret or the process.</p>
+    <div class="pc">
+      <ul class="pros"><li>Defense-in-depth, no code changes</li><li>Declarative; shrinks the blast radius</li></ul>
+      <ul class="cons"><li>Over-tightening can break the app</li><li>Doesn't constrain <code>root</code> or the kernel</li></ul>
+    </div>
+  </div>
+
+  <div class="miti">
+    <h3>Mount namespaces / <code>unshare</code></h3>
+    <p>Put the Cone in a <em>private mount namespace</em> (<code>PrivateMounts=yes</code> /
+       <code>PrivateTmp=yes</code>, or <code>unshare -m</code>) so the mount — and the plaintext on it — is
+       literally invisible to processes outside the namespace.</p>
+    <div class="pc">
+      <ul class="pros"><li>The secret mount doesn't exist in anyone else's filesystem view</li><li>Strong isolation between services</li></ul>
+      <ul class="cons"><li>Host <code>root</code> can still <code>nsenter</code> in</li><li>More moving parts; harder to debug</li></ul>
+    </div>
+  </div>
+
+  <p>Beyond isolating the mount, close the subtler paths the plaintext can take once it's in RAM — and
+     the one thing the cards above punt on, <code>root</code> itself:</p>
+
+  <div class="miti">
+    <h3>No swap / encrypted swap / <code>mlock</code></h3>
+    <p>Under memory pressure the kernel can page <code>tmpfs</code> out to the swap device — landing your
+       plaintext on a disk that <em>does</em> persist. Close it: disable swap, encrypt it (LUKS or
+       <code>zram</code>), or <code>mlock</code> the secret pages so they can't be evicted.</p>
+    <div class="pc">
+      <ul class="pros"><li>Removes the "plaintext silently written to swap" leak</li><li>Encrypted swap protects <em>all</em> RAM spillover, not just this secret</li></ul>
+      <ul class="cons"><li><code>mlock</code> needs <code>CAP_IPC_LOCK</code> / a raised <code>RLIMIT_MEMLOCK</code></li><li>Disabling swap risks OOM kills; encrypted swap adds setup</li></ul>
+    </div>
+  </div>
+
+  <div class="miti">
+    <h3>Restrict <code>ptrace</code></h3>
+    <p>A process running as the same user (or <code>root</code>) can attach to the reader and read the
+       decrypted secret straight out of its memory via <code>/proc/&lt;pid&gt;/mem</code>. Set
+       <code>kernel.yama.ptrace_scope=2</code> (or 3) to forbid it, and mount <code>/proc</code> with
+       <code>hidepid=2</code> so other users can't even enumerate the process.</p>
+    <div class="pc">
+      <ul class="pros"><li>Closes the live-memory read path between same-user processes</li><li><code>hidepid</code> also hides cmdlines/env that may carry secrets</li></ul>
+      <ul class="cons"><li>Breaks debuggers/profilers (<code>gdb</code>, <code>strace</code>) in dev</li><li><code>root</code> can re-raise the scope — not a defense against root</li></ul>
+    </div>
+  </div>
+
+  <div class="miti">
+    <h3>Disable core dumps</h3>
+    <p>If the reader crashes, a core dump can capture the decrypted secret to disk. Turn dumps off for the
+       service: <code>LimitCORE=0</code> (systemd), <code>prctl(PR_SET_DUMPABLE, 0)</code>, and a sane
+       <code>kernel.core_pattern</code> — so a crash can't spill the secret.</p>
+    <div class="pc">
+      <ul class="pros"><li>Removes the "secret ends up in a crash file" leak</li><li>Cheap and declarative in a systemd unit</li></ul>
+      <ul class="cons"><li>Loses post-mortem debugging for that service</li><li>Doesn't stop a live read — pair it with the <code>ptrace</code> card</li></ul>
+    </div>
+  </div>
+
+  <div class="miti">
+    <h3>SELinux / MAC confinement <span class="pill">constrains even root</span></h3>
+    <p>Discretionary permissions (<code>0400</code> + a uid) don't constrain <code>root</code>. Mandatory
+       Access Control does: label the Cone and the secret with a dedicated SELinux type and write policy so
+       only the reader's domain may read it — a <code>root</code> process in the wrong domain is denied. On
+       RHEL this is already enforcing; you're extending policy you run anyway.</p>
+    <div class="pc">
+      <ul class="pros"><li>Constrains even <code>root</code> — the answer to the caveat the other cards punt on</li><li>Native and enforcing on RHEL; no new runtime dependency</li></ul>
+      <ul class="cons"><li>Writing/maintaining policy is real work; a mislabel denies legitimately</li><li>A process running <em>in</em> the reader's domain is still trusted</li></ul>
+    </div>
+  </div>
+
+  <h2 id="writes">But what about writes?</h2>
+  <p>The Cone as shown is read-only — the app reads its config. Some apps also <em>write</em>: runtime
+     state, or rotating their own credential. What to do depends on two questions: do the writes need to
+     <strong>persist</strong>, and are they <strong>secret</strong>?</p>
+  <ul class="writes">
+    <li><strong>Disposable runtime state →</strong> let it live and die in the Cone. Nothing to persist,
+        nothing to encrypt. Simplest path: do nothing.</li>
+    <li><strong>Perma-mount + broker process →</strong> keep the Cone mounted for the app's lifetime, owned
+        by a long-running broker that seeds it from the ciphertext and re-encrypts writes back to disk. The
+        app reads and writes freely; only the broker touches the at-rest store.
+        <em>Persists writes, app unchanged — at the cost of broker complexity and a longer plaintext window.</em></li>
+    <li><strong>inotify write-back →</strong> watch the file; on close/modify, re-encrypt to the at-rest
+        ciphertext. <em>Lighter than a full broker — mind write races and partial writes.</em></li>
+    <li><strong>FUSE encrypting filesystem (gocryptfs / EncFS) →</strong> encrypt-on-write, decrypt-on-read,
+        transparently; files at rest are always ciphertext. <em>The general read-write answer with no app
+        change — at the cost of a FUSE dependency and some performance.</em></li>
+    <li><strong>App rotates its own secret →</strong> the broker captures the write and pushes the new value
+        to OpenBao, keeping the vault the source of truth. <em>Supports self-rotating apps; needs
+        bidirectional sync and conflict handling.</em></li>
+  </ul>
+
+  <h2 id="prod">In production</h2>
+  <p>The Cone is a per-service <code>tmpfs</code> at <code>/run/&lt;service&gt;</code> (systemd
+     <code>RuntimeDirectory</code> — the directory locked to 0700 via <code>RuntimeDirectoryMode</code>, the secret <em>file</em> written mode 0400, owned by the app, auto-removed on stop). The decryption key
+     never touches the disk — it is sealed to the machine's <strong>TPM</strong>, or handed over by
+     <strong>OpenBao</strong> (the same vault already issuing our SSH certificates), which can also rotate
+     the secret behind the scenes.</p>
+
+  <p class="foot">
+     “What is the Cone of Silence?” → <a href="https://youtu.be/trNgQoJ5f_I">a Get Smart classic</a>.<br>
+     Full production architecture (OpenBao, static vs. dynamic roles, TPM auto-unseal, single-instance
+     availability) lives in <code>NOTES.md</code>.
+  </p>
+</main>
+</body>
+</html>
