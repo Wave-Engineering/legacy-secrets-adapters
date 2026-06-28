@@ -34,3 +34,16 @@ This is a **catalog**: one pattern per directory, each a self-contained write-up
 Each pattern `README.md` follows: **Context · Forces · Solution · How it works ·
 Run the demo · Tradeoffs · Production hardening · Related**. The copy-me version is
 [`patterns/_template/README.md`](patterns/_template/README.md).
+
+## Slide decks (optional)
+
+A pattern whose walkthrough lives in a `walkthrough.py` manifest can ship a self-contained
+HTML slide deck. Build (or rebuild) it deterministically with:
+
+```bash
+python3 tools/build_deck.py patterns/<pattern>
+```
+
+This renders `<pattern>/deck.html` — one file, no dependencies, sendable as-is. It's a pure
+function of the manifest (fixed prompt, frozen output, no timestamps), so re-running produces
+byte-identical output. Regenerate it whenever you edit `walkthrough.py`, and commit the result.
