@@ -55,7 +55,8 @@ def beat_html(b):
 
 def slide_html(title, items):
     head = f'<h2 class="slide-title">{esc(title)}</h2>' if title else ""
-    return f'<section class="slide">{head}{"".join(beat_html(b) for b in items)}</section>'
+    cls = "slide cover" if any("title" in b for b in items) else "slide"
+    return f'<section class="{cls}">{head}{"".join(beat_html(b) for b in items)}</section>'
 
 
 # --- narrative order: title -> problem -> engage -> 2 acts -> disengage -> 2 acts -> takeaway
@@ -101,9 +102,10 @@ TEMPLATE = r"""<!DOCTYPE html>
   * { box-sizing: border-box; }
   body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3;
          font: 18px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: center;
-           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 4rem 2rem 5rem; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: flex-start;
+           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 2.5rem 2rem 5rem; overflow-y: auto; }
   .slide.active { display: flex; }
+  .slide.cover { justify-content: center; }
   .slide-title { margin: 0 0 .5rem; font-size: 1.5rem; color: #7ee787; font-weight: 700; }
   .beat { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; }
   .beat.show { opacity: 1; transform: none; }
@@ -152,16 +154,17 @@ __SECTIONS__
     bs.forEach(b => b.classList.remove('show'));
     if (revealAll) bs.forEach(b => b.classList.add('show'));
     else if (bs.length) bs[0].classList.add('show');
+    slides[i].scrollTop = 0;
     hud();
   }
   function next() {
     const bs = beats(slides[si]), shown = shownCount(slides[si]);
-    if (shown < bs.length) bs[shown].classList.add('show');
+    if (shown < bs.length) { bs[shown].classList.add('show'); bs[shown].scrollIntoView({block: 'nearest'}); }
     else if (si < slides.length - 1) enter(si + 1, false);
   }
   function prev() {
-    const shown = shownCount(slides[si]);
-    if (shown > 1) beats(slides[si])[shown - 1].classList.remove('show');
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown > 1) { bs[shown - 1].classList.remove('show'); if (shown - 2 >= 0) bs[shown - 2].scrollIntoView({block: 'nearest'}); }
     else if (si > 0) enter(si - 1, true);
   }
   addEventListener('keydown', e => {

@@ -9,9 +9,10 @@
   * { box-sizing: border-box; }
   body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3;
          font: 18px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: center;
-           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 4rem 2rem 5rem; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: flex-start;
+           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 2.5rem 2rem 5rem; overflow-y: auto; }
   .slide.active { display: flex; }
+  .slide.cover { justify-content: center; }
   .slide-title { margin: 0 0 .5rem; font-size: 1.5rem; color: #7ee787; font-weight: 700; }
   .beat { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; }
   .beat.show { opacity: 1; transform: none; }
@@ -37,22 +38,14 @@
 </style>
 </head>
 <body>
-<section class="slide"><div class="beat title"><h1>The Cone of Silence</h1><p class="tagline">a low-effort, RAM-only zone your secret never leaves</p><p class="kicker">legacy-secrets-adapters · a walkthrough</p></div></section>
+<section class="slide cover"><div class="beat title"><h1>The Cone of Silence</h1><p class="tagline">a low-effort, RAM-only zone your secret never leaves</p><p class="kicker">legacy-secrets-adapters · a walkthrough</p></div></section>
 <section class="slide"><h2 class="slide-title">The problem</h2><div class="beat"><p class="prose">A legacy app reads its credentials from a plaintext file on disk — and won't be re-released. Anyone who reads the disk (a backup, an image layer, a stray git add, a stolen drive) reads the password. We fix it WITHOUT touching the app.</p></div></section>
 <section class="slide"><h2 class="slide-title">Engage the Cone</h2><div class="beat"><p class="say">Decrypt the secret into a RAM-backed file at the path the app already reads.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host cone-of-silence]$ </span><span class="cmd">./cone.py engage</span></div><pre class="out">→ Cone ENGAGED: secret decrypted into RAM at /dev/shm/cone-of-silence/secrets.json (mode 0400)</pre></div></div></section>
 <section class="slide"><h2 class="slide-title">Cone ENGAGED · Read the secret</h2><div class="beat"><p class="say">The Cone of Silence is in place. Our legacy app reaches her secret the old<br>cleartext way — with no knowledge or awareness of encryption.<br>Only the ENCRYPTED file lives on disk; let's look:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host cone-of-silence]$ </span><span class="cmd">ls -la</span></div><pre class="out">total 88
 drwxr-xr-x 3 you you  4096 Jan  1 09:00 .
-drwxr-xr-x 4 you you  4096 Jan  1 09:00 ..
--rw-r--r-- 1 you you   140 Jan  1 09:00 .gitignore
--rw-r--r-- 1 you you  1820 Jan  1 09:00 BACKLOG.md
--rw-r--r-- 1 you you 11402 Jan  1 09:00 NOTES.md
--rw-r--r-- 1 you you  4011 Jan  1 09:00 README.md
--r-------- 1 you you    44 Jan  1 09:00 cone.key
 -rwxr-xr-x 1 you you  5102 Jan  1 09:00 cone.py
--rw-r--r-- 1 you you 21044 Jan  1 09:00 deck.html
 -rwxr-xr-x 1 you you  9120 Jan  1 09:00 demonstrate.py
 -rw-r--r-- 1 you you 12880 Jan  1 09:00 enlighten.html
-drwx------ 2 you you  4096 Jan  1 09:00 legacy-etc
 -rwxr-xr-x 1 you you  1903 Jan  1 09:00 legacy_reader.py
 -rw-r--r-- 1 you you   228 Jan  1 09:00 secrets.json.enc
 -rw-r--r-- 1 you you  3650 Jan  1 09:00 walkthrough.py</pre></div></div><div class="beat"><p class="say">...yet a cleartext secret is readable. Where? A memory-only filesystem —<br>the Cone of Silence. Here are the tmpfs (RAM) mounts:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host cone-of-silence]$ </span><span class="cmd">df -h -t tmpfs</span></div><pre class="out">Filesystem      Size  Used Avail Use% Mounted on
@@ -74,17 +67,9 @@ tmpfs            14G  4.0K   14G   1% /dev/shm</pre></div></div><div class="beat
 <section class="slide"><h2 class="slide-title">Disengage the Cone</h2><div class="beat"><p class="say">Wipe the secret from RAM. On disk there was only ciphertext all along.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host cone-of-silence]$ </span><span class="cmd">./cone.py disengage</span></div><pre class="out">→ Cone DISENGAGED: plaintext wiped from RAM (a reboot wipes /dev/shm anyway)</pre></div></div></section>
 <section class="slide"><h2 class="slide-title">Cone DISENGAGED · Read the secret</h2><div class="beat"><p class="say">The Cone of Silence is lifted. The secret has evaporated from RAM.<br>Only ciphertext remains on disk:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host cone-of-silence]$ </span><span class="cmd">ls -la</span></div><pre class="out">total 88
 drwxr-xr-x 3 you you  4096 Jan  1 09:00 .
-drwxr-xr-x 4 you you  4096 Jan  1 09:00 ..
--rw-r--r-- 1 you you   140 Jan  1 09:00 .gitignore
--rw-r--r-- 1 you you  1820 Jan  1 09:00 BACKLOG.md
--rw-r--r-- 1 you you 11402 Jan  1 09:00 NOTES.md
--rw-r--r-- 1 you you  4011 Jan  1 09:00 README.md
--r-------- 1 you you    44 Jan  1 09:00 cone.key
 -rwxr-xr-x 1 you you  5102 Jan  1 09:00 cone.py
--rw-r--r-- 1 you you 21044 Jan  1 09:00 deck.html
 -rwxr-xr-x 1 you you  9120 Jan  1 09:00 demonstrate.py
 -rw-r--r-- 1 you you 12880 Jan  1 09:00 enlighten.html
-drwx------ 2 you you  4096 Jan  1 09:00 legacy-etc
 -rwxr-xr-x 1 you you  1903 Jan  1 09:00 legacy_reader.py
 -rw-r--r-- 1 you you   228 Jan  1 09:00 secrets.json.enc
 -rw-r--r-- 1 you you  3650 Jan  1 09:00 walkthrough.py</pre></div></div><div class="beat"><p class="say">Watch the legacy app try to start with the Cone disengaged — no secret to be had:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host cone-of-silence]$ </span><span class="cmd">./legacy_reader.py --config /dev/shm/cone-of-silence/secrets.json</span></div><pre class="out">!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -118,16 +103,17 @@ drwx------ 2 you you  4096 Jan  1 09:00 legacy-etc
     bs.forEach(b => b.classList.remove('show'));
     if (revealAll) bs.forEach(b => b.classList.add('show'));
     else if (bs.length) bs[0].classList.add('show');
+    slides[i].scrollTop = 0;
     hud();
   }
   function next() {
     const bs = beats(slides[si]), shown = shownCount(slides[si]);
-    if (shown < bs.length) bs[shown].classList.add('show');
+    if (shown < bs.length) { bs[shown].classList.add('show'); bs[shown].scrollIntoView({block: 'nearest'}); }
     else if (si < slides.length - 1) enter(si + 1, false);
   }
   function prev() {
-    const shown = shownCount(slides[si]);
-    if (shown > 1) beats(slides[si])[shown - 1].classList.remove('show');
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown > 1) { bs[shown - 1].classList.remove('show'); if (shown - 2 >= 0) bs[shown - 2].scrollIntoView({block: 'nearest'}); }
     else if (si > 0) enter(si - 1, true);
   }
   addEventListener('keydown', e => {
