@@ -31,7 +31,7 @@ and implement **one at a time** — do not batch. Becomes GitHub issues at repo-
   (e.g. `bat`, `pygmentize`, `highlight`) for syntax coloring.
   _touches: `shell()` / `coach()` color scheme; output piping is a sub-task._
 
-- [ ] **6. Abstract into a JSON-driven demonstration app. (DEFER until pattern #2.)**
+- [x] **6. Abstract into a JSON-driven demonstration app.** _(done — issue #3)_
   Once there's more than one pattern walkthrough, factor the experience into a generic
   demonstration app driven by per-pattern JSON files (menu, walkthrough steps, commands, copy).
   Do this when we tackle the second pattern, not before.

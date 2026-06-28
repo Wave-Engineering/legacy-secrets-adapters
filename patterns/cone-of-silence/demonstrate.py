@@ -22,7 +22,8 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True  # no __pycache__ — keeps the demo dir clean AND un-greppable
 
-import cone  # the engine: ENC_FILE, KEY_FILE, SECRET, CONE, NEEDLE, init/materialize/wipe
+import cone         # the engine: ENC_FILE, KEY_FILE, SECRET, CONE, NEEDLE, init/materialize/wipe
+import walkthrough  # the walkthrough beats — shared source of truth with tools/build_deck.py
 
 HERE       = Path(__file__).resolve().parent
 READER     = "./legacy_reader.py"                  # run relative once we chdir(HERE)
@@ -106,12 +107,19 @@ def shell(cmd, run=None):
         print()                                                   # separate output from prompt in a pipe
     subprocess.run(run or cmd, shell=True)
 
-# best-effort syntax coloring — no hard dependency
+# best-effort syntax coloring — no hard dependency. Returns a color-enabled variant of
+# `cmd` to EXECUTE (shell() still displays the clean `cmd`), or None to run it as-is.
 def _have(tool): return shutil.which(tool) is not None
-def _ls(path="."):  return f"ls -la {path}".rstrip() + (" --color=always" if TTY else "")
-def _grep_color(g): return g.replace("grep -rn ", "grep -rn --color=always ", 1) if TTY else g
-def _cat(path):     return (f"bat -l json --style=plain --color=always {path}"
-                            if TTY and _have("bat") else f"cat {path}")
+def _colorize(cmd, kind):
+    if not TTY or not kind:
+        return None
+    if kind == "ls":
+        return cmd + " --color=always"
+    if kind == "grep":
+        return cmd.replace("grep -rn ", "grep -rn --color=always ", 1)
+    if kind == "cat" and _have("bat"):
+        return cmd.replace("cat ", "bat -l json --style=plain --color=always ", 1)
+    return None
 
 # --- Cone state + progress --------------------------------------------------
 # Per side, track which of {read, detect} the user has experienced:
@@ -165,52 +173,20 @@ def disengage():
     print(RED("    Cone of Silence DISENGAGED — the secret has evaporated from RAM.")
           if was else DIM("    The Cone of Silence was already disengaged."))
 
-# --- walkthroughs (one per Cone state) --------------------------------------
-def read_secret():
-    if engaged():
-        coach("The Cone of Silence is in place. Our legacy app reaches her secret the old\n"
-              "cleartext way — with no knowledge or awareness of encryption.\n"
-              "Only the ENCRYPTED file lives on disk; let's look:")
-        shell("ls -la", run=_ls())
-        coach("...yet a cleartext secret is readable. Where? A memory-only filesystem —\n"
-              "the Cone of Silence. Here are the tmpfs (RAM) mounts:")
-        shell("df -h -t tmpfs")
-        coach("Our legacy_reader.py starts up exactly as she always has:")
-        shell(f"{READER} --config {cone.SECRET}")
-        coach("And via a softlink at her HARD-CODED path, she runs with NO arguments, too! —\n"
-              "So apps with hard-coded filepaths are supported as well:")
-        shell(f"{READER}")
-        verdict("legacy_reader_py reads her secret. Nothing on disk changed.", ok=True)
-    else:
-        coach("The Cone of Silence is lifted. The secret has evaporated from RAM.\n"
-              "Only ciphertext remains on disk:")
-        shell("ls -la", run=_ls())
-        coach("Watch the legacy app try to start with the Cone disengaged — no secret to be had:")
-        shell(f"{READER} --config {cone.SECRET}")
-        coach("It is the same at her hard-coded path — the softlink is gone, so she fails loudly:")
-        shell(f"{READER}")
-        verdict("No Cone, no service — loud, early failures make it easy to see what happened.", ok=False)
-    progress[_side()].add("read")
+# --- walkthroughs (rendered from the shared manifest in walkthrough.py) ------
+def _render(act: str):
+    side = _side()
+    for beat in walkthrough.WALKTHROUGH[(side, act)]:
+        if "say" in beat:
+            coach(beat["say"])
+        elif "cmd" in beat:
+            shell(beat["cmd"], run=_colorize(beat["cmd"], beat.get("colorize")))
+        elif "verdict" in beat:
+            verdict(beat["verdict"], ok=beat["ok"])
+    progress[side].add(act)
 
-def detect():
-    grep = (f"grep -rn '{cone.NEEDLE}' . "
-            f"--exclude='*.py' --exclude='*.pyc' --exclude='*.html' --exclude='*.md' "
-            f"--exclude-dir='__pycache__' || echo '    (nothing found on disk)'")
-    if engaged():
-        coach("The app just read the secret. So it must be on disk somewhere, right?\n"
-              "Lets hunt through the whole directory for the password:")
-        shell(grep, run=_grep_color(grep))
-        coach("Nothing on disk. The cleartext lives ONLY inside the Cone (RAM). Proof:")
-        shell(f"cat {cone.SECRET}", run=_cat(cone.SECRET))
-        shell(f"df -h {cone.SECRET}")
-        verdict("Readable by the app, invisible to the disk. That is the whole trick.", ok=True)
-    else:
-        coach("The Cone is lifted. Hunt the disk for the password once more:")
-        shell(grep, run=_grep_color(grep))
-        coach("And the Cone itself is empty:")
-        shell(f"ls -la {cone.CONE} 2>/dev/null || echo '    (the Cone is gone)'")
-        coach("Nothing, anywhere. On disk: only ciphertext. In RAM: nothing.")
-    progress[_side()].add("detect")
+def read_secret(): _render("read")
+def detect():      _render("detect")
 
 def explore():
     sh = os.environ.get("SHELL", "/bin/bash")
