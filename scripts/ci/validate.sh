@@ -44,6 +44,13 @@ for pat in delivery-pattern-demos/*/ bootstrap-pattern-demos/*/; do
   echo "   ✓ $(basename "$pat")"
 done
 
+echo "== fuse-decrypt: end-to-end demo =="
+if test -c /dev/fuse; then
+  ( cd delivery-pattern-demos/fuse-decrypt && python3 demo.py )
+else
+  echo "   ⚪ /dev/fuse not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
 echo "== dynamic-credential-shim: live OpenBao + Postgres demo =="
 if docker info >/dev/null 2>&1; then
   ( cd delivery-pattern-demos/dynamic-credential-shim
