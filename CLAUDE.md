@@ -48,13 +48,15 @@ demo. Read this at session start.
 ## Structure
 
 ```
-patterns/<name>/             one pattern: README (the skeleton) + a runnable demo (+ optional NOTES.md)
-patterns/<name>/walkthrough.py   (optional) the demo walkthrough as DATA — drives the TUI AND the deck
-patterns/_template/          copy-me skeleton for a new pattern
-tools/build_deck.py          render a pattern's walkthrough.py -> a self-contained, deterministic deck.html
-scripts/ci/validate.sh       smoke-test the catalog (the local-testing entry point)
-docs/decision-guide.md       which pattern fits a given situation
-CONTRIBUTING.md              how to add a pattern + conventions
+delivery-pattern-demos/<name>/       delivery pattern: README + runnable demo (+ optional NOTES.md)
+bootstrap-pattern-demos/<name>/      bootstrap pattern: README + runnable demo (+ optional NOTES.md)
+<tree>/<name>/walkthrough.py         (optional) the demo walkthrough as DATA — drives the TUI AND the deck
+<tree>/_template/                    copy-me skeleton for a new pattern (one per axis)
+tools/build_deck.py                  render a pattern's walkthrough.py -> a self-contained, deterministic deck.html
+scripts/ci/validate.sh               smoke-test the catalog (the local-testing entry point)
+docs/decision-guide.md               which pattern fits a given situation
+docs/sketchbook.md                   design intentions per planned pattern (spec source for the wave campaign)
+CONTRIBUTING.md                      how to add a pattern + conventions
 ```
 
 Pattern README skeleton: **Context · Forces · Solution · How it works · Run the demo ·
@@ -66,8 +68,9 @@ Tradeoffs · Production hardening · Related**.
   gracefully when an optional tool like `bat` is absent). Don't introduce new formatters/linters.
 - Discover tooling rather than assuming — `scripts/ci/validate.sh` is the entry point.
 - **Slide decks are generated, never hand-edited.** Edit `walkthrough.py`, then rebuild with
-  `python3 tools/build_deck.py patterns/<name>` and commit the regenerated `deck.html`. The deck
-  is a pure function of the manifest (fixed prompt, frozen output) — byte-identical every run.
+  `python3 tools/build_deck.py delivery-pattern-demos/<name>` (or `bootstrap-pattern-demos/<name>`)
+  and commit the regenerated `deck.html`. The deck is a pure function of the manifest (fixed prompt,
+  frozen output) — byte-identical every run.
 
 ## Commit / PR format
 

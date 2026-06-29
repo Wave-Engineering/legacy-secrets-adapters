@@ -16,7 +16,7 @@ broker for a secret that should be minted on demand) wastes the most effort.
 
 - **Mintable / issued** — a credential authority can generate it short-lived and
   auto-expiring (a database password via OpenBao, an SSH cert, an x509 cert). Prefer
-  **dynamic issuance** so a leak is self-limiting. → [`dynamic-credential-shim`](../patterns/dynamic-credential-shim/)
+  **dynamic issuance** so a leak is self-limiting. → [`dynamic-credential-shim`](../delivery-pattern-demos/dynamic-credential-shim/)
   (✅ available). (`tpm-sealed-bootstrap` is a *bootstrap* pattern — a different axis; see below.)
 - **Opaque / held** — a value issued by an external party you can't mint or rotate on
   demand (a third-party API key, a vendor password). You can only *protect the held
@@ -27,7 +27,7 @@ broker for a secret that should be minted on demand) wastes the most effort.
 - **No (the common, hard case)** — the app reads a file at a fixed path and won't be
   re-released. The fix must be **transparent**: change what's *behind* the path, not the
   app.
-  - Secret fits in a file read once → **[`cone-of-silence`](../patterns/cone-of-silence/)**
+  - Secret fits in a file read once → **[`cone-of-silence`](../delivery-pattern-demos/cone-of-silence/)**
     (encrypt at rest, decrypt only into a RAM/tmpfs file at the app's path). ✅ available
   - Reader reads the path *once, sequentially* (no seek/mmap) → `fifo-stream` (planned) —
     a named pipe, zero plaintext on any filesystem.

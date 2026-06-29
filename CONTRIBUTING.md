@@ -7,7 +7,9 @@ This is a **catalog**: one pattern per directory, each a self-contained write-up
 
 1. Pick a decision branch that isn't covered yet — see [`docs/decision-guide.md`](docs/decision-guide.md).
 2. Open an issue, then branch: `feature/<issue#>-<pattern-slug>`.
-3. `cp -r patterns/_template patterns/<pattern-slug>` (kebab-case name).
+3. Copy the appropriate template (kebab-case name):
+   - Delivery pattern: `cp -r delivery-pattern-demos/_template delivery-pattern-demos/<pattern-slug>`
+   - Bootstrap pattern: `cp -r bootstrap-pattern-demos/_template bootstrap-pattern-demos/<pattern-slug>`
 4. Fill in `README.md` following the skeleton — keep the heading order.
 5. Add a **runnable demo** (a script, a `Makefile`, whatever — but it must actually run).
 6. Write **both** teaching artifacts (see below): `enlighten.html` (the why & what) and
@@ -31,27 +33,46 @@ This is a **catalog**: one pattern per directory, each a self-contained write-up
 - **Teach, don't just ship.** The demo should let a skeptic *see* the property hold
   (e.g. `grep` the disk and find nothing), not just assert it.
 
-## Bootstrap secret — out of scope (a hard convention)
+## The out-of-scope convention (both directions)
+
+Each axis keeps the other axis **deliberately out of scope** in its demos — this is a hard
+convention that prevents half-solutions from implying full coverage.
+
+### Delivery patterns → bootstrap is out of scope
 
 Every delivery pattern has a **bootstrap secret**: the credential its materializer/broker uses to
 reach its *own* key source (a Vault token, a KMS key, a TPM handle). How to anchor that without a
 stored secret — the turtles-to-silicon problem — is **orthogonal** to what a delivery pattern teaches,
 and it's a whole separate pattern family ([`docs/decision-guide.md`](docs/decision-guide.md)).
 
-So in **every** demo:
+So in **every** delivery demo:
 
 - **Hardcode the bootstrap secret obviously** (an unmistakable dev value) and label it — never
   half-solve key custody inline.
 - Add a **`## Bootstrap secret — out of scope`** section to the pattern's `README.md` (see the
   template) naming the bootstrap secret and pointing at the bootstrap-secret family.
 
-This keeps each demo's lesson clean and avoids implying a pattern "solves" key custody when it doesn't.
+### Bootstrap patterns → delivery is out of scope
+
+A bootstrap pattern anchors the secret to hardware/identity — it does *not* also teach how to
+materialize that secret to an unchanged app. That's a delivery pattern's job.
+
+So in **every** bootstrap demo:
+
+- **Use an obvious dev consumer** (e.g. a `cat` command or trivial reader) — never build a full
+  delivery pipeline inline.
+- Add a **`## Delivery pattern — out of scope`** section to the pattern's `README.md` (see the
+  bootstrap template) pointing at the delivery-pattern family.
+
+This keeps each demo's lesson clean and avoids implying a pattern "solves" the other axis.
 
 ## The skeleton
 
 Each pattern `README.md` follows: **Context · Forces · Solution · How it works ·
 Run the demo · Tradeoffs · Production hardening · Related**. The copy-me version is
-[`patterns/_template/README.md`](patterns/_template/README.md).
+[`delivery-pattern-demos/_template/README.md`](delivery-pattern-demos/_template/README.md)
+(or [`bootstrap-pattern-demos/_template/README.md`](bootstrap-pattern-demos/_template/README.md)
+for bootstrap patterns).
 
 ## Two artifacts, both required: the why/what and the how
 
@@ -65,7 +86,8 @@ both exist:
 - **`deck.html` — the *how*.** The terminal walk-through, generated from a `walkthrough.py` manifest:
 
   ```bash
-  python3 tools/build_deck.py patterns/<pattern>
+  python3 tools/build_deck.py delivery-pattern-demos/<pattern>
+  # or: python3 tools/build_deck.py bootstrap-pattern-demos/<pattern>
   ```
 
   One self-contained file, sendable as-is. A pure function of the manifest (fixed prompt, frozen

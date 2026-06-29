@@ -8,21 +8,22 @@
 #
 # Run from anywhere: ./scripts/ci/validate.sh
 set -euo pipefail
+shopt -s nullglob
 cd "$(dirname "$0")/../.."
 
 echo "== py_compile (all pattern + tool Python) =="
-python3 -m py_compile patterns/*/*.py tools/*.py
+python3 -m py_compile delivery-pattern-demos/*/*.py bootstrap-pattern-demos/*/*.py tools/*.py
 
 echo "== cone-of-silence: engine demo (cone.py demo) =="
-( cd patterns/cone-of-silence && python3 cone.py demo >/dev/null )
+( cd delivery-pattern-demos/cone-of-silence && python3 cone.py demo >/dev/null )
 
 echo "== cone-of-silence: interactive demo (demonstrate.py, scripted) =="
-( cd patterns/cone-of-silence \
+( cd delivery-pattern-demos/cone-of-silence \
     && printf '1\n\n3\n\n\n\n\n\n4\n\n\n\n\n2\n\n3\n\n\n\n\n4\n\n\n\n6\n' \
        | python3 demonstrate.py >/dev/null )
 
 echo "== decks build deterministically + self-contained =="
-for wt in patterns/*/walkthrough.py; do
+for wt in delivery-pattern-demos/*/walkthrough.py bootstrap-pattern-demos/*/walkthrough.py; do
   pat=$(dirname "$wt")
   python3 tools/build_deck.py "$pat" >/dev/null
   h1=$(sha256sum "$pat/deck.html" | cut -d' ' -f1)
@@ -35,7 +36,7 @@ for wt in patterns/*/walkthrough.py; do
 done
 
 echo "== every pattern ships both enlighten.html (why/what) and deck.html (how) =="
-for pat in patterns/*/; do
+for pat in delivery-pattern-demos/*/ bootstrap-pattern-demos/*/; do
   [ "$(basename "$pat")" = "_template" ] && continue
   for f in enlighten.html deck.html; do
     [ -f "$pat$f" ] || { echo "FAIL: $pat is missing $f (every pattern needs both)"; exit 1; }
@@ -45,7 +46,7 @@ done
 
 echo "== dynamic-credential-shim: live OpenBao + Postgres demo =="
 if docker info >/dev/null 2>&1; then
-  ( cd patterns/dynamic-credential-shim
+  ( cd delivery-pattern-demos/dynamic-credential-shim
     trap 'docker compose down -v >/dev/null 2>&1 || true' EXIT
     docker compose down -v >/dev/null 2>&1 || true   # fresh stack (rotate-root makes setup non-idempotent)
     docker compose up -d >/dev/null

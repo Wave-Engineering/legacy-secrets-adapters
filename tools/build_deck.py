@@ -2,7 +2,7 @@
 """build_deck.py — render a pattern's walkthrough manifest into a self-contained,
 deterministic HTML slide deck.
 
-    python3 tools/build_deck.py [pattern_dir]     # default: patterns/cone-of-silence
+    python3 tools/build_deck.py [pattern_dir]     # default: delivery-pattern-demos/cone-of-silence
 
 Reads <pattern_dir>/walkthrough.py (a SLIDES list + DEMO_PROMPT; legacy patterns without
 SLIDES fall back to a Cone-specific WALKTHROUGH composition) and writes
@@ -16,7 +16,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 pattern_dir = (Path(sys.argv[1]) if len(sys.argv) > 1
-               else REPO / "patterns" / "cone-of-silence").resolve()
+               else REPO / "delivery-pattern-demos" / "cone-of-silence").resolve()
 sys.path.insert(0, str(pattern_dir))
 import walkthrough as wt  # noqa: E402
 

@@ -27,8 +27,8 @@ does the deliverer authenticate to its *own* key source without a stored secret?
 
 | Pattern | Essence | Status |
 |---|---|---|
-| [cone-of-silence](patterns/cone-of-silence/) | encrypted at rest, decrypted only into a RAM (tmpfs) file at the path the app already reads | ✅ available |
-| [dynamic-credential-shim](patterns/dynamic-credential-shim/) | static DB password → an OpenBao-managed static role (rotated password, stable username) behind the same file, so a leak self-expires | ✅ available |
+| [cone-of-silence](delivery-pattern-demos/cone-of-silence/) | encrypted at rest, decrypted only into a RAM (tmpfs) file at the path the app already reads | ✅ available |
+| [dynamic-credential-shim](delivery-pattern-demos/dynamic-credential-shim/) | static DB password → an OpenBao-managed static role (rotated password, stable username) behind the same file, so a leak self-expires | ✅ available |
 | broker-sidecar | materialize a secret from OpenBao/Vault into a file for an unchanged reader | 🅿️ planned |
 | fifo-stream | named pipe (zero disk) for read-once sequential readers | 🅿️ planned |
 | fuse-decrypt | FUSE filesystem that decrypts on read (and handles writes) | 🅿️ planned |
@@ -39,13 +39,19 @@ does the deliverer authenticate to its *own* key source without a stored secret?
 |---|---|---|
 | tpm-sealed-bootstrap | how a materializer authenticates to its key source without a stored secret (turtles → silicon) | 🅿️ planned |
 
+## Roadmap & design intentions
+
+See [`docs/sketchbook.md`](docs/sketchbook.md) for per-pattern design briefs — mechanism, demo
+plan, honest tradeoffs — used as the spec source for the wave campaign.
+
 ## How patterns are structured
 
-Each `patterns/<name>/` carries a `README.md` that follows one skeleton —
-**Context · Forces · Solution · How it works · Run the demo · Tradeoffs · Production hardening · Related** —
-a runnable demo, and **two teaching artifacts that require each other: `enlighten.html` (the *why &
-what* — concept + diagrams + related) and `deck.html` (the *how* — the terminal walk-through)**. A
-`NOTES.md` deep-dive where useful.
+Each pattern lives in one of two parallel trees — `delivery-pattern-demos/<name>/` or
+`bootstrap-pattern-demos/<name>/` — and carries a `README.md` that follows one skeleton
+(**Context · Forces · Solution · How it works · Run the demo · Tradeoffs · Production hardening ·
+Related**), a runnable demo, and **two teaching artifacts that require each other:
+`enlighten.html` (the *why & what* — concept + diagrams + related) and `deck.html` (the *how* —
+the terminal walk-through)**. A `NOTES.md` deep-dive where useful.
 
 ## License
 

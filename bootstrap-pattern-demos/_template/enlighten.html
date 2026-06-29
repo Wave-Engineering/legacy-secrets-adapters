@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;Pattern&gt; — why &amp; what</title>
+<!--
+  enlighten.html is the WHY and the WHAT. deck.html is the HOW. They are a REQUIRED pair.
+  Teach the concept here: the problem, a couple of before/after diagrams, the honest tradeoffs,
+  and pointers to related patterns. Keep it self-contained (no external fetches). Match a sibling
+  pattern's dark-theme aesthetic (copy the CSS from cone-of-silence/enlighten.html). Delete comments.
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0d1117; color:#e6edf3;
+         font:17px/1.65 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:820px; margin:0 auto; padding:3rem 1.5rem 5rem; }
+  h1 { font-size:2.2rem; margin:0 0 .25rem; } h2 { margin:2.6rem 0 .6rem; color:#7ee787; }
+  .lead { font-size:1.25rem; border-left:3px solid #7ee787; padding-left:1rem; color:#c9d1d9; }
+  a { color:#58a6ff; } code { font-family:"SF Mono",Consolas,monospace; color:#a5d6ff; }
+  pre { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:1rem; overflow-x:auto; }
+  .foot { margin-top:3rem; color:#8b949e; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>&lt;Pattern Name&gt;</h1>
+  <p class="lead">&lt;the one-sentence why&gt;</p>
+
+  <h2>The problem</h2>
+  <p>&lt;the turtles-to-silicon problem: what bootstraps the bootstrapper?&gt;</p>
+
+  <h2>The idea</h2>
+  <p>&lt;the concept — add side-by-side before/after diagrams; see cone-of-silence for the box/arrow CSS&gt;</p>
+
+  <h2>How it works</h2>
+  <pre>&lt;a small ASCII diagram of what moves at runtime&gt;</pre>
+  <p>The step-by-step walk-through is in <a href="deck.html"><code>deck.html</code></a>.</p>
+
+  <h2>Tradeoffs — be honest</h2>
+  <p>&lt;what this does NOT protect against; the realistic bar&gt;</p>
+
+  <h2>Related</h2>
+  <ul><li><strong>&lt;other-pattern&gt;</strong> — &lt;how it connects&gt;</li></ul>
+
+  <h2>Delivery pattern — out of scope</h2>
+  <p>This demo anchors the bootstrap secret (&lt;the obvious dev value&gt;); what <em>consumes</em>
+     the anchored credential — a delivery pattern that materializes the secret to an unchanged app —
+     is the orthogonal delivery-pattern family. See
+     <a href="../../docs/decision-guide.md"><code>decision-guide.md</code></a>.</p>
+
+  <p class="foot">This page is the <strong>why &amp; what</strong>; the <strong>how</strong> is
+     the terminal walk-through — <a href="deck.html"><code>deck.html</code></a>.</p>
+</main>
+</body>
+</html>

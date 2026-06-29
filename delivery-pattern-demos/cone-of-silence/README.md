@@ -42,7 +42,7 @@ for the illustrated version (side-by-side before/after diagrams).
 Requirements: `python3` + the `cryptography` package (`dnf install python3-cryptography` or
 `python3 -m pip install cryptography`). `bat` is optional — it syntax-highlights the JSON in the walkthrough.
 Open `enlighten.html` in a browser for the illustrated write-up; open `deck.html` for the
-slide-deck walkthrough (rebuild with `python3 ../../tools/build_deck.py patterns/cone-of-silence`).
+slide-deck walkthrough (rebuild with `python3 ../../tools/build_deck.py delivery-pattern-demos/cone-of-silence`).
 
 | File | Role |
 |------|------|
