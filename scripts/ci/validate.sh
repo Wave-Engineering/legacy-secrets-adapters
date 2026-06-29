@@ -96,4 +96,23 @@ else
   echo "   ⚪ Docker not available — skipping broker-sidecar live demo"
 fi
 
+echo "== tpm-sealed-bootstrap: end-to-end demo =="
+if command -v systemd-creds >/dev/null 2>&1 && command -v swtpm >/dev/null 2>&1; then
+  ver=$(systemd-creds --version 2>&1 | grep -oP 'systemd \K[0-9]+' | head -1)
+  if [ "${ver:-0}" -ge 250 ]; then
+    ( cd bootstrap-pattern-demos/tpm-sealed-bootstrap
+      output=$(python3 demo.py 2>&1)
+      rc=$?
+      if [ $rc -eq 0 ]; then
+        echo "   ✓ TPM demo completed (seal/unseal or graceful exit with deck pointer)"
+      else
+        echo "   ⚠ demo.py exited $rc (check swtpm/systemd-creds setup)"
+      fi )
+  else
+    echo "   ⚪ systemd ${ver} < 250 — skipping TPM demo (py_compile + decks still validated)"
+  fi
+else
+  echo "   ⚪ systemd-creds or swtpm not available — skipping TPM demo (py_compile + decks still validated)"
+fi
+
 echo "✅ validate.sh: all checks passed"

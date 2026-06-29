@@ -1,0 +1,7 @@
+# Runtime artifacts produced by the demo — never commit.
+run/
+swtpm-state/
+*.sealed
+*.cred
+__pycache__/
+*.pyc

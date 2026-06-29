@@ -1,0 +1,31 @@
+# tpm-demo.service — example systemd unit that unseals a TPM-bound credential at start.
+#
+# LoadCredentialEncrypted= tells systemd to unseal the blob via the TPM at service start.
+# The plaintext appears ONLY in $CREDENTIALS_DIRECTORY (a per-service tmpfs, mode 0400).
+# When the service stops, the tmpfs is unmounted — the plaintext evaporates.
+#
+# This is NOT installed — it's a reference for how the demo's materializer.py would run
+# as a real service. demo.py simulates this flow with swtpm + systemd-creds decrypt.
+[Unit]
+Description=TPM-Sealed Bootstrap Demo — materializer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# The sealed blob lives on disk; systemd unseals it to RAM at start.
+LoadCredentialEncrypted=bao-token:run/bao-token.cred
+
+# The materializer reads from $CREDENTIALS_DIRECTORY/bao-token and authenticates.
+ExecStart=/usr/bin/python3 materializer.py
+
+# Hardening — defense in depth around the plaintext credential.
+ProtectSystem=strict
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target
