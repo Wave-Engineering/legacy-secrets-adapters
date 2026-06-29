@@ -1,0 +1,4 @@
+# Runtime artifacts from the broker-sidecar demo — never commit
+run/
+*.rendered
+__pycache__/
