@@ -1,0 +1,12 @@
+# OpenBao dev-mode for the cloud-instance-identity bootstrap pattern demo.
+#
+# The OpenBao dev token is an OBVIOUS dev value and is the demo's BOOTSTRAP SECRET used
+# only for initial configuration — the whole POINT of this pattern is that the materializer
+# does NOT use a stored token; it authenticates via cloud instance identity (AWS auth method).
+# Non-default host port (58200) so this never collides with a local OpenBao.
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: ["IPC_LOCK"]
+    ports: ["58200:8200"]
