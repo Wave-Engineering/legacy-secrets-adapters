@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIFO Stream — a legacy-secrets adapter pattern</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code, .mono { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; color:#58a6ff; text-decoration:none; }
+  a { color: #58a6ff; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1rem 1.2rem; }
+  .card.bad { border-color: #f8514955; } .card.good { border-color: #2ea04355; }
+  .card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+  .bad h3 { color: #ff7b72; } .good h3 { color: #7ee787; }
+  .pill { display:inline-block; background:#21262d; border:1px solid #30363d; border-radius:999px;
+          padding:.15rem .7rem; font-size:.8rem; color:#8b949e; margin-right:.4rem; }
+
+  /* block diagram */
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.9rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.bad  { border-color:#f85149; background:#2b1718; color:#ffa198; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.pipe { border-color:#d2a8ff; background:#1a1226; color:#d2a8ff; }
+  .box.dim  { color:#8b949e; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+  .note { color:#8b949e; font-size:.9rem; margin:.8rem .2rem 0; }
+
+  pre { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:1rem; overflow-x:auto; font-size:.92rem; }
+
+  /* tradeoff cards */
+  .tradeoff { background:#0f141b; border:1px solid #30363d; border-left:3px solid #f0883e;
+              border-radius:8px; padding:.85rem 1.1rem; margin:.9rem 0; }
+  .tradeoff h3 { margin:0 0 .3rem; color:#f0883e; font-size:1.08rem; }
+  .tradeoff > p { margin:.2rem 0; }
+
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FIFO Stream</h1>
+  <p class="sub mono">a legacy-secrets adapter pattern &nbsp;·&nbsp; "named-pipe zero-disk secret delivery"</p>
+
+  <p class="lead">The secret streams through kernel memory and never exists on any filesystem — not even tmpfs.</p>
+
+  <nav>
+    <a href="#problem">The problem</a>
+    <a href="#idea">The idea</a>
+    <a href="#comparison">Why stronger than tmpfs</a>
+    <a href="#tradeoffs">Tradeoffs</a>
+    <a href="#prod">In production</a>
+  </nav>
+
+  <h2 id="problem">The problem</h2>
+  <p>A legacy application reads its credentials from a file at a fixed path. Even with the
+     Cone of Silence (tmpfs), the plaintext still <em>exists</em> — as a file in RAM, readable by
+     root, by processes in the same mount namespace, potentially paged to swap. For a reader that
+     opens the file once, reads sequentially, and never seeks back — we can eliminate the file entirely.</p>
+
+  <h2 id="idea">The idea, side by side</h2>
+  <p>Replace the file with a named pipe (FIFO) at the same path. The app's <code>open()</code>
+     syscall works identically — it just blocks until a writer feeds data into the pipe.</p>
+
+  <div class="diagrams">
+    <figure class="panel">
+      <figcaption>Writer feeds the pipe</figcaption>
+      <div class="flow">
+        <div class="box">secret source<small>(OpenBao / env / sealed store)</small></div>
+        <div class="arrow">&#x2193;<span>write(secret)</span></div>
+        <div class="box pipe">mkfifo /path/secrets.json<small>NAMED PIPE (kernel buffer)</small></div>
+        <div class="arrow">&#x2193;<span>data flows through</span></div>
+        <div class="box good">legacy app reads<small>open("/path/secrets.json")</small></div>
+      </div>
+      <p class="note">The pipe is a rendezvous point — data flows through the kernel buffer
+         from writer to reader. No bytes are stored anywhere.</p>
+    </figure>
+
+    <figure class="panel">
+      <figcaption>After the read</figcaption>
+      <div class="flow">
+        <div class="box dim">writer: done<small>(exited or closed fd)</small></div>
+        <div class="arrow">&#x2193;<span></span></div>
+        <div class="box pipe">mkfifo /path/secrets.json<small>EMPTY — zero bytes stored</small></div>
+        <div class="arrow">&#x2193;<span>second read blocks forever</span></div>
+        <div class="box dim">no data to replay<small>read-once by nature</small></div>
+      </div>
+      <p class="note">Once consumed, the data is gone. A second reader hangs until a new writer
+         appears. There is nothing on disk, in RAM, or in any buffer to steal.</p>
+    </figure>
+  </div>
+
+  <h2 id="comparison">Why stronger than tmpfs</h2>
+  <div class="grid">
+    <div class="card bad"><h3>tmpfs file (Cone of Silence)</h3>
+      <p><span class="pill">exists as a file</span><span class="pill">readable by root</span>
+         The plaintext exists in RAM as a file — visible to anything that can read the mount.
+         Must be wiped explicitly. Can be paged to swap.</p></div>
+    <div class="card good"><h3>Named pipe (FIFO Stream)</h3>
+      <p><span class="pill">no stored data</span><span class="pill">read-once</span>
+         No data is stored anywhere — the secret flows through the kernel pipe buffer and is
+         gone. Nothing to steal, nothing to wipe, nothing to page.</p></div>
+  </div>
+  <p>The tradeoff: a tmpfs file can be read multiple times, seeked, and persists for the service
+     lifetime. A pipe is strictly read-once and requires timing coordination between writer and reader.</p>
+
+  <h2 id="tradeoffs">Tradeoffs</h2>
+
+  <div class="tradeoff">
+    <h3>Read-once</h3>
+    <p>The pipe can only be read once. If the app re-reads the config file (e.g., on HUP or
+       reconnect), the second read blocks until a new write. This pattern only works for
+       sequential, read-once readers — apps that open, read, close, and never look back.</p>
+  </div>
+
+  <div class="tradeoff">
+    <h3>Timing coordination</h3>
+    <p>The writer must feed the pipe before (or concurrently with) the reader's
+       <code>open()</code>. If the reader opens first, it blocks. If the writer writes with no
+       reader, it blocks. Orchestration (systemd ordering, a wrapper script, or a concurrent
+       writer thread) is required.</p>
+  </div>
+
+  <div class="tradeoff">
+    <h3>No persistence</h3>
+    <p>A service restart means a new write is needed — the pipe holds nothing between runs.
+       The writer must be available at every start, not just first boot. For services that
+       restart frequently, this adds latency (waiting for the writer) and a hard dependency
+       on the secret source's availability.</p>
+  </div>
+
+  <h2 id="prod">In production</h2>
+  <p>The pipe lives at the path the app already reads. The writer is typically a <code>systemd</code>
+     <code>ExecStartPre=</code> script or a sidecar that fetches the secret from OpenBao and feeds
+     the pipe just before the app's <code>ExecStart=</code>. Ordering guarantees in the service unit
+     handle the timing coordination.</p>
+  <pre><code>[Service]
+ExecStartPre=/usr/local/bin/feed-secret --pipe /run/app/secrets.json
+ExecStart=/opt/legacy-app/bin/start
+RuntimeDirectory=app
+RuntimeDirectoryMode=0700</code></pre>
+  <p>The pipe is created in a <code>RuntimeDirectory</code> (auto-cleaned on stop), mode <code>0600</code>,
+     owned by the service user. The writer runs as the same user or via a privileged helper that
+     drops the fd.</p>
+
+  <p class="foot">
+     This pattern sits on the decision tree at: Can you change the reader? NO (transparent) &#x2192;
+     Reader's access pattern? Sequential, read-once &#x2192; <strong>fifo-stream</strong>.<br>
+     Full catalog: <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">legacy-secrets-adapters</a>.
+  </p>
+</main>
+</body>
+</html>

@@ -13,6 +13,9 @@ cd "$(dirname "$0")/../.."
 
 echo "== py_compile (all pattern + tool Python) =="
 python3 -m py_compile delivery-pattern-demos/*/*.py bootstrap-pattern-demos/*/*.py tools/*.py
+for tf in delivery-pattern-demos/*/tests/*.py bootstrap-pattern-demos/*/tests/*.py; do
+  [ -f "$tf" ] && python3 -m py_compile "$tf"
+done
 
 echo "== cone-of-silence: engine demo (cone.py demo) =="
 ( cd delivery-pattern-demos/cone-of-silence && python3 cone.py demo >/dev/null )
@@ -21,6 +24,12 @@ echo "== cone-of-silence: interactive demo (demonstrate.py, scripted) =="
 ( cd delivery-pattern-demos/cone-of-silence \
     && printf '1\n\n3\n\n\n\n\n\n4\n\n\n\n\n2\n\n3\n\n\n\n\n4\n\n\n\n6\n' \
        | python3 demonstrate.py >/dev/null )
+
+echo "== fifo-stream: demo end-to-end =="
+( cd delivery-pattern-demos/fifo-stream && python3 demo.py quiet )
+
+echo "== fifo-stream: unit tests =="
+python3 -m pytest delivery-pattern-demos/fifo-stream/tests/ -q --tb=short
 
 echo "== decks build deterministically + self-contained =="
 for wt in delivery-pattern-demos/*/walkthrough.py bootstrap-pattern-demos/*/walkthrough.py; do
