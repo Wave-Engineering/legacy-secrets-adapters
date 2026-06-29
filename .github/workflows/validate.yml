@@ -28,17 +28,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Python dependencies
-        run: |
-          pip install --quiet \
-            enlighten \
-            hvac \
-            jinja2 \
-            cryptography \
-            pyfuse3 \
-            pytest \
-            requests
-
       - name: Install system packages
         run: |
           sudo apt-get update -qq
@@ -48,13 +37,22 @@ jobs:
             swtpm \
             postgresql-client
 
-      - name: Install Ansible
-        run: pip install --quiet ansible-core
-
       - name: Install OpenBao CLI
         run: |
           curl -fsSL https://github.com/openbao/openbao/releases/download/v2.1.0/bao_2.1.0_linux_amd64.deb -o /tmp/bao.deb
           sudo dpkg -i /tmp/bao.deb
+
+      - name: Install Python dependencies
+        run: |
+          pip install --quiet \
+            enlighten \
+            hvac \
+            jinja2 \
+            cryptography \
+            pyfuse3 \
+            pytest \
+            requests \
+            ansible-core
 
       - name: Run validate.sh
         run: ./scripts/ci/validate.sh
