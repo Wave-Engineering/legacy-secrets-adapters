@@ -68,4 +68,16 @@ else
   echo "   ⚪ Docker not available — skipping the live demo (py_compile + decks still validated)"
 fi
 
+echo "== cloud-instance-identity: live OpenBao + mock metadata demo =="
+if docker info >/dev/null 2>&1; then
+  ( cd bootstrap-pattern-demos/cloud-instance-identity
+    trap 'docker compose down -v >/dev/null 2>&1 || true' EXIT
+    docker compose down -v >/dev/null 2>&1 || true
+    python3 demo.py \
+      || { echo "FAIL: cloud-instance-identity demo.py did not exit 0"; exit 1; }
+    echo "   ✓ cloud-instance-identity: all proofs passed" )
+else
+  echo "   ⚪ Docker not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
 echo "✅ validate.sh: all checks passed"

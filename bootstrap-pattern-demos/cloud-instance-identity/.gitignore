@@ -1,0 +1,4 @@
+# Runtime artifacts — never commit
+run/
+__pycache__/
+*.pyc
