@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppRole Response-Wrapping — a walkthrough</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3;
+         font: 18px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: flex-start;
+           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 2.5rem 2rem 5rem; overflow-y: auto; }
+  .slide.active { display: flex; }
+  .slide.cover { justify-content: center; }
+  .slide-title { margin: 0 0 .5rem; font-size: 1.5rem; color: #7ee787; font-weight: 700; }
+  .beat { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; }
+  .beat.show { opacity: 1; transform: none; }
+  .say { color: #b9c2cc; margin: .2rem 0; }
+  .prose { color: #c9d1d9; margin: .4rem 0; font-size: 1.12rem; }
+  .title { text-align: center; }
+  .title h1 { font-size: 3rem; margin: 0 0 .4rem; line-height: 1.1; }
+  .tagline { font-size: 1.35rem; color: #7ee787; margin: 0; }
+  .kicker { color: #8b949e; font-family: "SF Mono", Consolas, monospace; margin-top: 1.2rem; }
+  .term { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: .8rem 1rem;
+          font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; font-size: .92rem; margin: .3rem 0; }
+  .promptline { white-space: pre-wrap; word-break: break-all; }
+  .prompt { color: #7ee787; } .cmd { color: #e6edf3; }
+  .term pre.out { margin: .5rem 0 0; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; }
+  .verdict { font-weight: 700; margin: .4rem 0; }
+  .verdict.ok { color: #7ee787; } .verdict.fail { color: #ff7b72; }
+  a { color: #58a6ff; } code { font-family: "SF Mono", Consolas, monospace; color: #a5d6ff; }
+  .hud { position: fixed; bottom: 1rem; left: 0; right: 0; display: flex; justify-content: center;
+         gap: 1rem; align-items: center; color: #8b949e; font-size: .8rem; }
+  .hud .bar { width: 180px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; }
+  .hud .bar > i { display: block; height: 100%; background: #7ee787; transition: width .3s ease; }
+  kbd { background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 0 .35rem; }
+</style>
+</head>
+<body>
+<section class="slide cover"><div class="beat title"><h1>AppRole Response-Wrapping</h1><p class="tagline">a single-use wrapped token bootstrap — replay-proof, time-limited, no stored secret</p><p class="kicker">legacy-secrets-adapters · a walkthrough</p></div></section>
+<section class="slide"><h2 class="slide-title">The bootstrap problem</h2><div class="beat"><p class="prose">A materializer needs to authenticate to its key source (OpenBao) without a stored secret. If you bake the secret into the image or drop it on disk, anyone who steals the disk steals the identity. The question: how do you deliver a credential that is DEAD on replay and DEAD after a short window?</p></div><div class="beat"><p class="prose">Answer: response-wrap a SecretID. The wrapping token is single-use (consumed on first unwrap) and short-lived (TTL). A trusted deployer generates it; the materializer consumes it exactly once.</p></div></section>
+<section class="slide"><h2 class="slide-title">Bring up OpenBao + configure AppRole</h2><div class="beat"><p class="say">[deployer] Real OpenBao in dev mode. The root token here is the obvious dev value<br>this pattern replaces in production.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host approle-response-wrapping]$ </span><span class="cmd">docker compose up -d</span></div><pre class="out"> ✔ Container approle-response-wrapping-openbao-1  Started</pre></div></div><div class="beat"><p class="say">[deployer] Enable AppRole auth, create the role + policy, write a demo secret:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host approle-response-wrapping]$ </span><span class="cmd"># (programmatic setup via demo.py — enable approle, create role, write secret)</span></div><pre class="out">[setup] Enabling AppRole auth method ...
+[setup] Creating AppRole role 'demo-app' ...
+[setup] Creating policy 'demo-app-policy' ...
+[setup] Writing demo secret ...
+[setup] Fetching RoleID ...
+[setup] RoleID saved to run/role-id</pre></div></div></section>
+<section class="slide"><h2 class="slide-title">Deployer wraps SecretID (Ansible)</h2><div class="beat"><p class="say">[deployer] The Ansible playbook generates a response-wrapped SecretID<br>and delivers the wrapping token to the target. TTL=30s, single-use.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host approle-response-wrapping]$ </span><span class="cmd">ansible-playbook -i inventory.yml playbook.yml</span></div><pre class="out">PLAY [Wrap and deliver AppRole SecretID] ***
+
+TASK [Ensure run directory exists] ***
+ok: [localhost]
+
+TASK [Generate response-wrapped SecretID] ***
+ok: [localhost]
+
+TASK [Deliver wrapped token to target] ***
+changed: [localhost]
+
+TASK [Report delivery] ***
+ok: [localhost] =&gt; msg: "Wrapped SecretID delivered to run/wrapped-token (TTL=30s, single-use, accessor=hmac-v1:abc...)"</pre></div></div><div class="beat"><p class="verdict ok">Wrapping token delivered. It can be unwrapped exactly once, within 30s.</p></div></section>
+<section class="slide"><h2 class="slide-title">Materializer unwraps + authenticates</h2><div class="beat"><p class="say">[target] The materializer reads the wrapping token, unwraps it to get the<br>SecretID, then authenticates via AppRole (RoleID + SecretID) and fetches the secret.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host approle-response-wrapping]$ </span><span class="cmd">python3 materializer.py</span></div><pre class="out">[materializer] unwrapping token to obtain SecretID ...
+[materializer] SecretID obtained (single-use token consumed)
+[materializer] authenticating via AppRole (RoleID + SecretID) ...
+[materializer] authenticated — got client token
+[materializer] fetching secret from secret/data/demo-app/config ...
+[materializer] secret retrieved: keys=['password', 'host']
+[materializer] (password used in memory — never printed, never logged)</pre></div></div><div class="beat"><p class="verdict ok">Materializer authenticated without a stored secret.</p></div></section>
+<section class="slide"><h2 class="slide-title">Replay fails — single-use</h2><div class="beat"><p class="say">[attacker] What if someone steals the wrapping token after delivery?<br>They try to unwrap it again:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host approle-response-wrapping]$ </span><span class="cmd"># attempt to unwrap the same token a second time</span></div><pre class="out">Error: wrapping token is not valid or does not exist (HTTP 400)</pre></div></div><div class="beat"><p class="verdict ok">Single-use: consumed on first unwrap. Replay is impossible.</p></div></section>
+<section class="slide"><h2 class="slide-title">Expired token fails — TTL</h2><div class="beat"><p class="say">[attacker] What if they intercept the token before the materializer gets it,<br>but wait too long?</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host approle-response-wrapping]$ </span><span class="cmd"># generate a token with TTL=2s, wait 3s, attempt unwrap</span></div><pre class="out">Error: wrapping token is not valid or does not exist (HTTP 400)</pre></div></div><div class="beat"><p class="verdict ok">TTL expired: the token is dead. The window to intercept is tiny.</p></div></section>
+<section class="slide"><h2 class="slide-title">The takeaway</h2><div class="beat"><p class="prose">A response-wrapped SecretID is single-use (consumed on unwrap) and short-lived (TTL). Together they make the bootstrap credential replay-proof: an attacker who intercepts the token has a narrow window to use it, and if the materializer gets there first the token is already gone.</p></div><div class="beat"><p class="prose">The deployer needs a privileged token to generate wraps — this is the trust anchor. In production that's a CI/CD pipeline with limited scope, an Ansible Tower credential, or a cloud identity. The RoleID is the non-secret half; only the wrapped SecretID crosses the wire.</p></div><div class="beat"><p class="prose"><strong>Delivery pattern — out of scope.</strong> This demo anchors the bootstrap; what <em>consumes</em> the anchored credential (a shim, a sidecar, a Cone) is the delivery-pattern family. Why &amp; what: <code>enlighten.html</code> · <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.</p></div></section>
+<div class="hud">
+  <span id="counter">1 / 1</span>
+  <span class="bar"><i id="prog"></i></span>
+  <span><kbd>←</kbd> <kbd>→</kbd> / click to navigate</span>
+</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let si = 0;
+  const beats = s => [...s.querySelectorAll('.beat')];
+  const shownCount = s => beats(s).filter(b => b.classList.contains('show')).length;
+
+  function hud() {
+    document.getElementById('counter').textContent = (si + 1) + ' / ' + slides.length;
+    document.getElementById('prog').style.width = ((si + 1) / slides.length * 100) + '%';
+  }
+  function enter(i, revealAll) {
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    si = i;
+    const bs = beats(slides[i]);
+    bs.forEach(b => b.classList.remove('show'));
+    if (revealAll) bs.forEach(b => b.classList.add('show'));
+    else if (bs.length) bs[0].classList.add('show');
+    slides[i].scrollTop = 0;
+    hud();
+  }
+  function next() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown < bs.length) { bs[shown].classList.add('show'); bs[shown].scrollIntoView({block: 'nearest'}); }
+    else if (si < slides.length - 1) enter(si + 1, false);
+  }
+  function prev() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown > 1) { bs[shown - 1].classList.remove('show'); if (shown - 2 >= 0) bs[shown - 2].scrollIntoView({block: 'nearest'}); }
+    else if (si > 0) enter(si - 1, true);
+  }
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') enter(0, false);
+    else if (e.key === 'End') enter(slides.length - 1, true);
+  });
+  addEventListener('click', e => { if (!e.target.closest('a')) next(); });
+  enter(0, false);
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppRole Response-Wrapping — why &amp; what</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; color: #a5d6ff; }
+  a { color: #58a6ff; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; text-decoration:none; }
+
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.88rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.bad  { border-color:#f85149; background:#2b1718; color:#ffa198; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.dim  { color:#8b949e; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+  .note { color:#8b949e; font-size:.9rem; margin:.8rem .2rem 0; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1rem 0; }
+  @media (max-width:680px){ .grid{ grid-template-columns:1fr; } }
+  .card { background:#0f141b; border:1px solid #30363d; border-left:3px solid #d2a8ff;
+          border-radius:8px; padding:.85rem 1.1rem; margin:.2rem 0; }
+  .card h3 { margin:0 0 .3rem; color:#d2a8ff; font-size:1.05rem; }
+  .card.warn { border-left-color:#f0883e; }
+  .card.warn h3 { color:#f0883e; }
+
+  pre { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:1rem; overflow-x:auto; font-size:.9rem; }
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AppRole Response-Wrapping</h1>
+  <p class="sub">single-use wrapped token bootstrap for a materializer that cannot store a secret</p>
+
+  <p class="lead">The materializer needs to authenticate to OpenBao without a stored secret.
+     A <em>response-wrapped</em> SecretID is consumed on first unwrap and dead after its TTL —
+     replay is impossible, and the window to intercept is tiny.</p>
+
+  <nav>
+    <a href="#problem">The bootstrap problem</a>
+    <a href="#idea">The idea</a>
+    <a href="#single-use">Why single-use kills replay</a>
+    <a href="#tradeoffs">Tradeoffs</a>
+    <a href="#related">Related</a>
+    <a href="deck.html">the walk-through (how)</a>
+  </nav>
+
+  <h2 id="problem">The bootstrap problem</h2>
+  <p>Every delivery pattern (dynamic-credential-shim, cone-of-silence, broker-sidecar) needs a
+     <strong>bootstrap credential</strong> — how does the materializer authenticate to its own key
+     source? If you bake it into the image, a stolen image leaks the identity. If you drop it on
+     disk, a stolen disk leaks it. You need the credential to be <strong>delivered just-in-time</strong>,
+     <strong>consumed exactly once</strong>, and <strong>dead after a short window</strong>.</p>
+
+  <h2 id="idea">The idea, side by side</h2>
+  <div class="diagrams">
+    <figure class="panel">
+      <figcaption>Without wrapping — stored secret</figcaption>
+      <div class="flow">
+        <div class="box">Deployer</div>
+        <div class="arrow">&#x2193;<span>bakes secret into image/disk</span></div>
+        <div class="box bad">Materializer<small>stored SecretID on disk — valid until revoked</small></div>
+        <div class="arrow">&#x2193;<span>authenticates</span></div>
+        <div class="box">OpenBao</div>
+      </div>
+      <p class="note">Steal the disk, steal the identity. The secret lives forever unless
+         someone manually revokes it — and "someone" is often "nobody".</p>
+    </figure>
+
+    <figure class="panel">
+      <figcaption>With response-wrapping</figcaption>
+      <div class="flow">
+        <div class="box">Deployer (trusted pipeline)</div>
+        <div class="arrow">&#x2193;<span>wraps SecretID (TTL=30s, single-use)</span></div>
+        <div class="box good">Wrapping token<small>consumed on first unwrap</small></div>
+        <div class="arrow">&#x2193;<span>unwrap &#x2192; SecretID &#x2192; login</span></div>
+        <div class="box">Materializer &#x2192; OpenBao</div>
+      </div>
+      <p class="note">The wrapping token is dead after first use OR after TTL — whichever
+         comes first. No stored secret. Replay fails.</p>
+    </figure>
+  </div>
+
+  <h2 id="how">How it works</h2>
+  <pre>
+  Deployer (Ansible, CI/CD, Tower)
+       │  POST /auth/approle/role/demo-app/secret-id
+       │  Header: X-Vault-Wrap-TTL: 30s
+       ▼
+  Wrapping Token (single-use, 30s TTL)
+       │  delivered to target (file, env, pipe)
+       ▼
+  Materializer
+       │  POST /sys/wrapping/unwrap  →  SecretID
+       │  POST /auth/approle/login (RoleID + SecretID)  →  client token
+       │  GET  /secret/data/demo-app/config  →  the actual secret
+       ▼
+  Application (password used in memory, never stored)</pre>
+  <p>The step-by-step terminal walk-through is in <a href="deck.html"><code>deck.html</code></a>.</p>
+
+  <h2 id="single-use">Why single-use kills replay</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Single-use (consumed on unwrap)</h3>
+      <p>The wrapping token is invalidated the moment it is unwrapped. A second unwrap attempt
+         returns HTTP 400. An attacker who intercepts the token <em>after</em> the materializer
+         gets it finds a dead token.</p>
+    </div>
+    <div class="card">
+      <h3>Short TTL (dead after window)</h3>
+      <p>Even if the attacker intercepts the token <em>before</em> the materializer, they have
+         at most 30 seconds to use it. And if the materializer tries next and fails, that is
+         an immediate detection signal — someone else consumed the token.</p>
+    </div>
+    <div class="card warn">
+      <h3>Detection: failed unwrap = compromise signal</h3>
+      <p>If the materializer's unwrap fails (token already consumed), someone else got there
+         first. This is an <strong>active detection</strong> mechanism — not just prevention but
+         alerting. In production, wire this to your SIEM.</p>
+    </div>
+    <div class="card warn">
+      <h3>The transit window</h3>
+      <p>Between generation and consumption, the wrapping token exists in transit. This is the
+         residual exposure: a sufficiently privileged attacker on the delivery channel (the
+         network, the file path) can race the materializer. Shrink the TTL to shrink the window.</p>
+    </div>
+  </div>
+
+  <h2 id="tradeoffs">Tradeoffs — be honest</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Requires a trusted deployer</h3>
+      <p>The entity generating the wrap needs a privileged token (it can mint SecretIDs).
+         In production: a CI/CD runner, Ansible Tower, a cloud function with an IAM role.
+         The trust has to start <em>somewhere</em>.</p>
+    </div>
+    <div class="card">
+      <h3>Transit exposure window</h3>
+      <p>The wrapping token crosses the wire. An attacker on the delivery path can race the
+         materializer. Mitigation: short TTL, TLS, detection (failed unwrap = alert).</p>
+    </div>
+    <div class="card">
+      <h3>No hardware binding</h3>
+      <p>Response-wrapping proves "the deployer authorized this identity" — it does NOT prove
+         "this specific machine requested it." For hardware binding, compose with a TPM-sealed
+         bootstrap (the materializer presents a TPM attestation before the deployer wraps).</p>
+    </div>
+  </div>
+
+  <h2 id="related">Related concepts</h2>
+  <ul>
+    <li><strong>dynamic-credential-shim</strong> — a delivery pattern that <em>consumes</em> the
+        AppRole token this bootstrap provides (orthogonal axis).</li>
+    <li><strong>tpm-sealed-bootstrap</strong> (planned) — hardware-binds the identity so even
+        the deployer can't impersonate the target without its TPM.</li>
+    <li><strong>cone-of-silence</strong> — keeps the fetched secret RAM-only once authenticated.</li>
+  </ul>
+
+  <h2>Delivery pattern — out of scope</h2>
+  <p>This demo anchors the bootstrap secret (the AppRole SecretID, delivered as a response-wrapped
+     token). What <em>consumes</em> the anchored credential — a shim that materializes or streams
+     the secret to an unchanged app — is an orthogonal concern addressed by the delivery-pattern
+     family. See <a href="../../docs/decision-guide.md"><code>decision-guide.md</code></a>.</p>
+
+  <p class="foot">
+     This page is the <strong>why &amp; what</strong>. The <strong>how</strong> is the terminal
+     walk-through — open <a href="deck.html"><code>deck.html</code></a>. Full production detail:
+     <code>README.md</code> ·
+     <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.
+  </p>
+</main>
+</body>
+</html>
