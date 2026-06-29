@@ -1,0 +1,10 @@
+# OpenBao dev-mode — the authentication target for the materializer.
+#
+# The dev root token is an OBVIOUS dev value (the bootstrap secret this demo
+# replaces with TPM-sealed silicon). Non-default port (58300) to avoid collisions.
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: ["IPC_LOCK"]
+    ports: ["58300:8200"]
