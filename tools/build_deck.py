@@ -4,7 +4,8 @@ deterministic HTML slide deck.
 
     python3 tools/build_deck.py [pattern_dir]     # default: patterns/cone-of-silence
 
-Reads <pattern_dir>/walkthrough.py (WALKTHROUGH + DEMO_PROMPT) and writes
+Reads <pattern_dir>/walkthrough.py (a SLIDES list + DEMO_PROMPT; legacy patterns without
+SLIDES fall back to a Cone-specific WALKTHROUGH composition) and writes
 <pattern_dir>/deck.html. A PURE function of the manifest — no Date/random, a fixed demo
 prompt, frozen output — so the deck is byte-identical on every run and on every machine,
 and the single .html file opens standalone in any browser (nothing external to fetch).
@@ -59,8 +60,10 @@ def slide_html(title, items):
     return f'<section class="{cls}">{head}{"".join(beat_html(b) for b in items)}</section>'
 
 
-# --- narrative order: title -> problem -> engage -> 2 acts -> disengage -> 2 acts -> takeaway
-slides = [
+# --- Cone-of-silence fallback composition (used ONLY when a pattern's walkthrough has no SLIDES).
+# Lazy (a function) because it references wt.SECRET / wt.WALKTHROUGH, which only the Cone defines.
+def _cone_slides():
+    return [
     (None, [{"title": "The Cone of Silence",
              "tagline": "a low-effort, RAM-only zone your secret never leaves",
              "kicker": "legacy-secrets-adapters · a walkthrough"}]),
@@ -89,6 +92,21 @@ slides = [
                  '<a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a></p>'}]),
 ]
 
+# A pattern's walkthrough.py may define its own SLIDES (list of {title, beats}); otherwise we fall
+# back to the Cone composition above. This is what makes build_deck.py pattern-agnostic.
+slides = ([(s.get("title"), s["beats"]) for s in wt.SLIDES]
+          if hasattr(wt, "SLIDES") else _cone_slides())
+
+
+def _deck_title(slds):
+    for _t, items in slds:
+        for b in items:
+            if "title" in b:
+                return f'{b["title"]} — a walkthrough'
+    return "a walkthrough"
+
+
+TITLE = _deck_title(slides)
 SECTIONS = "\n".join(slide_html(t, items) for t, items in slides)
 
 TEMPLATE = r"""<!DOCTYPE html>
@@ -96,7 +114,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Cone of Silence — a walkthrough</title>
+<title>__TITLE__</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -180,7 +198,7 @@ __SECTIONS__
 </html>
 """
 
-out = TEMPLATE.replace("__SECTIONS__", SECTIONS)
+out = TEMPLATE.replace("__SECTIONS__", SECTIONS).replace("__TITLE__", esc(TITLE))
 deck = pattern_dir / "deck.html"
 deck.write_text(out)
 print(f"wrote {deck.relative_to(REPO)} ({len(out)} bytes, {len(slides)} slides)")

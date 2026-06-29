@@ -16,8 +16,8 @@ broker for a secret that should be minted on demand) wastes the most effort.
 
 - **Mintable / issued** — a credential authority can generate it short-lived and
   auto-expiring (a database password via OpenBao, an SSH cert, an x509 cert). Prefer
-  **dynamic issuance** so a leak is self-limiting. → `dynamic-credential-shim` (planned),
-  `tpm-sealed-bootstrap` (planned).
+  **dynamic issuance** so a leak is self-limiting. → [`dynamic-credential-shim`](../patterns/dynamic-credential-shim/)
+  (✅ available). (`tpm-sealed-bootstrap` is a *bootstrap* pattern — a different axis; see below.)
 - **Opaque / held** — a value issued by an external party you can't mint or rotate on
   demand (a third-party API key, a vendor password). You can only *protect the held
   value*. → the materialization patterns below.
@@ -37,9 +37,17 @@ broker for a secret that should be minted on demand) wastes the most effort.
   → `broker-sidecar` (planned): fetch from OpenBao/Vault and materialize for the reader,
   with rotation and audit.
 
-## Cross-cutting: where does the key (or broker identity) live?
+## The other axis: the bootstrap secret (orthogonal)
 
-Every pattern eventually bottoms out at a root of trust the file-thief can't reach —
-a cloud KMS/IAM role, an mTLS/SPIFFE identity, a **TPM**, an HSM. You can't make a secret
-from nothing; you can only anchor it to hardware. `tpm-sealed-bootstrap` (planned) covers
-the bootstrap-identity problem directly.
+Every delivery pattern bottoms out at the same question: *how does the materializer/broker
+authenticate to its **own** key source without a stored secret?* — the turtles-to-silicon regress.
+It ends at a root of trust the file-thief can't reach: a cloud KMS/IAM role, an mTLS/SPIFFE
+identity, a **TPM**, an HSM. You can't make a secret from nothing; you can only anchor it to hardware.
+
+This is **orthogonal** to delivery/lifecycle, so the catalog treats it as a separate axis. **Inside
+each delivery demo it is deliberately out of scope** — the demo hardcodes its bootstrap secret
+obviously and says so, rather than half-solving key custody and implying the pattern handles it. The
+bootstrap-secret family addresses it head-on:
+
+- `tpm-sealed-bootstrap` (planned) — seal the anchor to the machine's TPM.
+- (more planned — AppRole response-wrapping, cloud instance identity, …)

@@ -8,7 +8,7 @@ unchangeable app — each pattern is a self-contained write-up plus a runnable d
 
 ## When to reach for these
 
-A quick decision tree (full version coming in `docs/decision-guide.md`):
+A quick decision tree (full version: [`docs/decision-guide.md`](docs/decision-guide.md)):
 
 1. **Does the app need the plaintext, or only to *verify* a value?** If it only verifies → hash it (Argon2id),
    don't encrypt. These patterns are for when the plaintext must be *recovered and used*.
@@ -18,20 +18,34 @@ A quick decision tree (full version coming in `docs/decision-guide.md`):
 
 ## Catalog
 
+Two **orthogonal** axes. *Delivery & lifecycle* patterns get a secret to an unchangeable app and govern
+its lifetime. *Bootstrap-secret* patterns answer the question every delivery pattern leaves open — "how
+does the deliverer authenticate to its *own* key source without a stored secret?" — and are deliberately
+**out of scope** inside each delivery demo (see [`CONTRIBUTING.md`](CONTRIBUTING.md)).
+
+### Delivery & lifecycle
+
 | Pattern | Essence | Status |
 |---|---|---|
 | [cone-of-silence](patterns/cone-of-silence/) | encrypted at rest, decrypted only into a RAM (tmpfs) file at the path the app already reads | ✅ available |
+| [dynamic-credential-shim](patterns/dynamic-credential-shim/) | static DB password → an OpenBao-managed static role (rotated password, stable username) behind the same file, so a leak self-expires | ✅ available |
 | broker-sidecar | materialize a secret from OpenBao/Vault into a file for an unchanged reader | 🅿️ planned |
 | fifo-stream | named pipe (zero disk) for read-once sequential readers | 🅿️ planned |
 | fuse-decrypt | FUSE filesystem that decrypts on read (and handles writes) | 🅿️ planned |
-| dynamic-credential-shim | replace a static DB password with an OpenBao dynamic/static role behind the same file | 🅿️ planned |
-| tpm-sealed-bootstrap | how a materializer authenticates to its key source without a stored secret | 🅿️ planned |
+
+### Bootstrap-secret (orthogonal)
+
+| Pattern | Essence | Status |
+|---|---|---|
+| tpm-sealed-bootstrap | how a materializer authenticates to its key source without a stored secret (turtles → silicon) | 🅿️ planned |
 
 ## How patterns are structured
 
 Each `patterns/<name>/` carries a `README.md` that follows one skeleton —
 **Context · Forces · Solution · How it works · Run the demo · Tradeoffs · Production hardening · Related** —
-plus a runnable demo and, where useful, a `NOTES.md` deep-dive.
+a runnable demo, and **two teaching artifacts that require each other: `enlighten.html` (the *why &
+what* — concept + diagrams + related) and `deck.html` (the *how* — the terminal walk-through)**. A
+`NOTES.md` deep-dive where useful.
 
 ## License
 

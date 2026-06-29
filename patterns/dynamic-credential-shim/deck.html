@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Credential Shim — a walkthrough</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3;
+         font: 18px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: flex-start;
+           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 2.5rem 2rem 5rem; overflow-y: auto; }
+  .slide.active { display: flex; }
+  .slide.cover { justify-content: center; }
+  .slide-title { margin: 0 0 .5rem; font-size: 1.5rem; color: #7ee787; font-weight: 700; }
+  .beat { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; }
+  .beat.show { opacity: 1; transform: none; }
+  .say { color: #b9c2cc; margin: .2rem 0; }
+  .prose { color: #c9d1d9; margin: .4rem 0; font-size: 1.12rem; }
+  .title { text-align: center; }
+  .title h1 { font-size: 3rem; margin: 0 0 .4rem; line-height: 1.1; }
+  .tagline { font-size: 1.35rem; color: #7ee787; margin: 0; }
+  .kicker { color: #8b949e; font-family: "SF Mono", Consolas, monospace; margin-top: 1.2rem; }
+  .term { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: .8rem 1rem;
+          font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; font-size: .92rem; margin: .3rem 0; }
+  .promptline { white-space: pre-wrap; word-break: break-all; }
+  .prompt { color: #7ee787; } .cmd { color: #e6edf3; }
+  .term pre.out { margin: .5rem 0 0; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; }
+  .verdict { font-weight: 700; margin: .4rem 0; }
+  .verdict.ok { color: #7ee787; } .verdict.fail { color: #ff7b72; }
+  a { color: #58a6ff; } code { font-family: "SF Mono", Consolas, monospace; color: #a5d6ff; }
+  .hud { position: fixed; bottom: 1rem; left: 0; right: 0; display: flex; justify-content: center;
+         gap: 1rem; align-items: center; color: #8b949e; font-size: .8rem; }
+  .hud .bar { width: 180px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; }
+  .hud .bar > i { display: block; height: 100%; background: #7ee787; transition: width .3s ease; }
+  kbd { background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 0 .35rem; }
+</style>
+</head>
+<body>
+<section class="slide cover"><div class="beat title"><h1>Dynamic Credential Shim</h1><p class="tagline">a static DB password → an OpenBao-managed credential that rotates, so a leak self-expires</p><p class="kicker">legacy-secrets-adapters · a walkthrough</p></div></section>
+<section class="slide"><h2 class="slide-title">The problem</h2><div class="beat"><p class="prose">A legacy app reads a STATIC Postgres password from a file and won't be re-released. That password is valid forever — so a single leak (a backup, a log, a stolen disk) is valid forever too. We want the credential to ROTATE and a leak to self-expire — without touching the app.</p></div></section>
+<section class="slide"><h2 class="slide-title">Bring up OpenBao + Postgres</h2><div class="beat"><p class="say">Real OpenBao (dev mode) + Postgres in containers. The OpenBao token and the PG superuser<br>password here are obvious dev values — bootstrap secrets, out of scope (see the README).</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">docker compose up -d</span></div><pre class="out"> ✔ Container dynamic-credential-shim-postgres-1  Healthy
+ ✔ Container dynamic-credential-shim-openbao-1   Started</pre></div></div><div class="beat"><p class="say">Configure the database secrets engine and a STATIC role — OpenBao now owns and rotates<br>the password of one fixed Postgres user, app_pg_user:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">./setup.sh</span></div><pre class="out">→ creating the fixed app role OpenBao will manage (app_pg_user)
+→ enabling + configuring the database secrets engine
+→ rotating OpenBao's own admin password (now no human knows it)
+→ defining the STATIC role (OpenBao owns + rotates app_pg_user's password)
+✅ setup complete</pre></div></div></section>
+<section class="slide"><h2 class="slide-title">The managed credential works</h2><div class="beat"><p class="say">The shim fetches the current managed credential and writes the file the reader reads:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">./shim.py</span></div><pre class="out">→ shim: wrote OpenBao-managed credential for 'app_pg_user' to run/secrets.json</pre></div></div><div class="beat"><p class="say">The unchanged legacy reader connects — it has no idea the password is managed or rotates:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">./legacy_reader.py</span></div><pre class="out">[legacy-reader] opened secrets.json; connecting to 127.0.0.1:55432/appdb as app_pg_user ...
+[legacy-reader] connected OK as app_pg_user|2026-01-01 09:00:00+00
+[legacy-reader] (password used in memory to connect — never printed, never logged)</pre></div></div></section>
+<section class="slide"><h2 class="slide-title">Rotate — and the leaked copy dies</h2><div class="beat"><p class="say">Say an attacker exfiltrates a copy of the current password. Then OpenBao rotates the<br>static role (here we force it; in production it's a schedule):</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">bao write -f database/rotate-role/app-static</span></div><pre class="out">Success! Data written to: database/rotate-role/app-static</pre></div></div><div class="beat"><p class="say">The exfiltrated copy no longer authenticates:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">psql 'postgresql://app_pg_user:&lt;exfiltrated&gt;@127.0.0.1:55432/appdb' -tAc 'select 1'</span></div><pre class="out">psql: error: connection to server at "127.0.0.1", port 55432 failed:
+FATAL:  password authentication failed for user "app_pg_user"</pre></div></div><div class="beat"><p class="verdict ok">The leak self-expired. A stolen credential is dead within one rotation window.</p></div></section>
+<section class="slide"><h2 class="slide-title">The app keeps working — untouched</h2><div class="beat"><p class="say">The shim re-materializes the new password; the reader (unchanged) reconnects:</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">./shim.py</span></div><pre class="out">→ shim: wrote OpenBao-managed credential for 'app_pg_user' to run/secrets.json</pre></div></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host dynamic-credential-shim]$ </span><span class="cmd">./legacy_reader.py</span></div><pre class="out">[legacy-reader] opened secrets.json; connecting to 127.0.0.1:55432/appdb as app_pg_user ...
+[legacy-reader] connected OK as app_pg_user|2026-01-01 09:00:00+00
+[legacy-reader] (password used in memory to connect — never printed, never logged)</pre></div></div></section>
+<section class="slide"><h2 class="slide-title">The takeaway</h2><div class="beat"><p class="prose">Static password → a leak is valid forever. An OpenBao-managed STATIC role → a fixed username (pool-friendly), a password OpenBao rotates, and a leaked copy that self-expires within a rotation window. The app never changed — only what's behind its file did.</p></div><div class="beat"><p class="prose">Dynamic roles (a brand-new Postgres user per short lease) are a small extension of this — left to the reader. They harden the leak window further but the changing username can break a legacy connection pool; see NOTES.md.</p></div><div class="beat"><p class="prose"><strong>Bootstrap secret — out of scope.</strong> The OpenBao token here is an obvious dev value; how the shim would really authenticate is an orthogonal concern (the bootstrap-secret pattern family). Why &amp; what: <code>enlighten.html</code> · deep-dive: <code>NOTES.md</code> · <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.</p></div></section>
+<div class="hud">
+  <span id="counter">1 / 1</span>
+  <span class="bar"><i id="prog"></i></span>
+  <span><kbd>←</kbd> <kbd>→</kbd> / click to navigate</span>
+</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let si = 0;
+  const beats = s => [...s.querySelectorAll('.beat')];
+  const shownCount = s => beats(s).filter(b => b.classList.contains('show')).length;
+
+  function hud() {
+    document.getElementById('counter').textContent = (si + 1) + ' / ' + slides.length;
+    document.getElementById('prog').style.width = ((si + 1) / slides.length * 100) + '%';
+  }
+  function enter(i, revealAll) {
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    si = i;
+    const bs = beats(slides[i]);
+    bs.forEach(b => b.classList.remove('show'));
+    if (revealAll) bs.forEach(b => b.classList.add('show'));
+    else if (bs.length) bs[0].classList.add('show');
+    slides[i].scrollTop = 0;
+    hud();
+  }
+  function next() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown < bs.length) { bs[shown].classList.add('show'); bs[shown].scrollIntoView({block: 'nearest'}); }
+    else if (si < slides.length - 1) enter(si + 1, false);
+  }
+  function prev() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown > 1) { bs[shown - 1].classList.remove('show'); if (shown - 2 >= 0) bs[shown - 2].scrollIntoView({block: 'nearest'}); }
+    else if (si > 0) enter(si - 1, true);
+  }
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') enter(0, false);
+    else if (e.key === 'End') enter(slides.length - 1, true);
+  });
+  addEventListener('click', e => { if (!e.target.closest('a')) next(); });
+  enter(0, false);
+</script>
+</body>
+</html>

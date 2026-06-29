@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dynamic Credential Shim — why &amp; what</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; color: #a5d6ff; }
+  a { color: #58a6ff; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; text-decoration:none; }
+
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.88rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.bad  { border-color:#f85149; background:#2b1718; color:#ffa198; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.dim  { color:#8b949e; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+  .note { color:#8b949e; font-size:.9rem; margin:.8rem .2rem 0; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1rem 0; }
+  @media (max-width:680px){ .grid{ grid-template-columns:1fr; } }
+  table.cmp { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.95rem; }
+  table.cmp th, table.cmp td { border:1px solid #30363d; padding:.5rem .7rem; text-align:left; vertical-align:top; }
+  table.cmp th { background:#161b22; color:#c9d1d9; }
+  table.cmp td.good { color:#7ee787; } table.cmp td.bad { color:#ff7b72; }
+
+  .miti { background:#0f141b; border:1px solid #30363d; border-left:3px solid #d2a8ff;
+          border-radius:8px; padding:.85rem 1.1rem; margin:.9rem 0; }
+  .miti h3 { margin:0 0 .3rem; color:#d2a8ff; font-size:1.05rem; }
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Dynamic Credential Shim</h1>
+  <p class="sub mono">managed, rotating credentials for a database app you can't change</p>
+
+  <p class="lead">A static password is valid <em>forever</em> — so a leak is valid forever too. A
+     <em>managed</em> credential rotates, so a leaked copy self-expires.</p>
+
+  <nav>
+    <a href="#problem">The problem</a>
+    <a href="#idea">The idea</a>
+    <a href="#roles">Static vs dynamic</a>
+    <a href="#window">The leak window</a>
+    <a href="#related">Related</a>
+    <a href="deck.html">▶ the walk-through (how)</a>
+  </nav>
+
+  <h2 id="problem">The problem</h2>
+  <p>A legacy app reads a <strong>static</strong> Postgres password from a file and won't be
+     re-released. That password never changes, so the moment it leaks — a backup, a log line, a
+     stolen disk, a screenshot — the leak is good <em>forever</em>. Rotating it normally means
+     editing the app or its config. We can't. We want the credential to rotate and a leak to
+     <strong>time-box itself</strong>, with the app none the wiser.</p>
+
+  <h2 id="idea">The idea, side by side</h2>
+  <div class="diagrams">
+    <figure class="panel">
+      <figcaption>① Static password — today</figcaption>
+      <div class="flow">
+        <div class="box">OpenBao? no — a human</div>
+        <div class="arrow">↓<span>sets once, never changes</span></div>
+        <div class="box bad">secrets.json<small>password • valid forever</small></div>
+        <div class="arrow">↓<span>read</span></div>
+        <div class="box">legacy app → Postgres</div>
+      </div>
+      <p class="note">A leaked copy authenticates until a human gets around to changing it — which,
+         for a legacy app, is "never".</p>
+    </figure>
+
+    <figure class="panel">
+      <figcaption>② Managed static role</figcaption>
+      <div class="flow">
+        <div class="box">OpenBao<small>owns app_pg_user's password</small></div>
+        <div class="arrow">↓<span>rotates on a schedule</span></div>
+        <div class="box good">shim → secrets.json<small>fixed user • fresh password</small></div>
+        <div class="arrow">↓<span>read (unchanged app)</span></div>
+        <div class="box">legacy app → Postgres</div>
+      </div>
+      <p class="note">Same username (pool-friendly), rotating password. A copy taken before a
+         rotation is dead after it.</p>
+    </figure>
+  </div>
+
+  <p>The credential the app reads is the same shape it always was — a username and a password in a
+     file. Only its <em>lifecycle</em> changed: OpenBao mints and rotates it, a small shim writes it
+     to the app's file, and the app connects exactly as before.</p>
+
+  <h2 id="how">How it works</h2>
+  <pre style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1rem;overflow-x:auto;font-size:.9rem">
+  OpenBao (static role: owns + rotates app_pg_user's password)
+        │  bao read database/static-creds/app-static
+        ▼
+   shim ──writes──▶ secrets.json ──reads──▶ legacy app ──connects──▶ Postgres (as app_pg_user)
+        ▲
+        └─ on rotation: re-fetch + rewrite; the app reconnects with the new password.
+           A password exfiltrated BEFORE the rotation no longer authenticates AFTER it.</pre>
+  <p>The terminal walk-through in <a href="deck.html"><code>deck.html</code></a> shows this happening
+     against a real OpenBao + Postgres: connect, rotate, watch the stolen copy get rejected.</p>
+
+  <h2 id="roles">Static role vs dynamic role</h2>
+  <p>OpenBao's database engine offers two shapes. This pattern centers on the <strong>static
+     role</strong> because it's the one a legacy connection pool tolerates.</p>
+  <table class="cmp">
+    <tr><th></th><th>Static role <em>(this pattern)</em></th><th>Dynamic role <em>(reader's exercise)</em></th></tr>
+    <tr><td>Identity</td><td class="good">one fixed username</td><td>a new username per lease</td></tr>
+    <tr><td>What changes</td><td>the password, on a schedule</td><td>the whole credential expires, then is dropped</td></tr>
+    <tr><td>Leak window</td><td>until the next rotation</td><td class="good">until the lease TTL (can be minutes)</td></tr>
+    <tr><td>Connection pool</td><td class="good">friendly — username never changes</td><td class="bad">hostile — new logins need the new user</td></tr>
+  </table>
+  <p>Dynamic roles shrink the leak window further, but the changing username breaks a pool that
+     opens connections under one identity. For an app you can't change, the static role is the
+     pragmatic win; swapping it for a dynamic role is a small, well-trodden extension — left to you.</p>
+
+  <h2 id="window">The leak window — honest about what this buys</h2>
+  <div class="grid">
+    <div class="miti"><h3>What it gives you</h3>
+      <p>A stolen credential stops working within one rotation period instead of living forever.
+         Tighten <code>rotation_period</code> and the window shrinks.</p></div>
+    <div class="miti"><h3>What it doesn't</h3>
+      <p>It is <em>not</em> instant revocation, and the plaintext still lands in a file. Pair it with
+         the <a href="../cone-of-silence/enlighten.html">Cone of Silence</a> to keep that file in RAM,
+         and tune rotation against how often the app reconnects.</p></div>
+  </div>
+  <p class="note"><strong>Availability:</strong> a single OpenBao is a SPOF for <em>rotation</em>, not
+     for <em>use</em> — a static credential keeps working if OpenBao is down; only rotation pauses.
+     (A dynamic role with a hard expiry would instead fail closed. See <code>NOTES.md</code>.)</p>
+
+  <h2 id="related">Related concepts</h2>
+  <ul>
+    <li><strong><a href="../cone-of-silence/enlighten.html">Cone of Silence</a></strong> — this pattern
+        owns the credential's <em>lifecycle</em>; the Cone owns its <em>delivery</em>. Compose them:
+        rotate the credential <em>and</em> keep it RAM-only.</li>
+    <li><strong>broker-sidecar</strong> (planned) — the shim generalized into a sidecar with templating
+        and an audit trail.</li>
+    <li><strong>bootstrap-secret family</strong> (planned) — how the shim would authenticate to OpenBao
+        without a stored secret. See the catalog's two axes in
+        <a href="../../docs/decision-guide.md"><code>decision-guide.md</code></a>.</li>
+  </ul>
+
+  <h2>Bootstrap secret — out of scope</h2>
+  <p>This demo hardcodes its bootstrap secrets — the OpenBao dev token and the Postgres superuser
+     password — obviously and on purpose. How the shim would really authenticate to OpenBao
+     <em>without</em> a stored secret (the turtles-to-silicon problem) is an orthogonal concern
+     addressed by the bootstrap-secret pattern family. Conflating it here would obscure the lesson.</p>
+
+  <p class="foot">
+     This page is the <strong>why &amp; what</strong>. The <strong>how</strong> is the terminal
+     walk-through — open <a href="deck.html"><code>deck.html</code></a>. Full production detail:
+     <code>NOTES.md</code> · <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.
+  </p>
+</main>
+</body>
+</html>
