@@ -13,8 +13,9 @@ cd "$(dirname "$0")/../.."
 
 echo "== py_compile (all pattern + tool Python) =="
 python3 -m py_compile delivery-pattern-demos/*/*.py bootstrap-pattern-demos/*/*.py tools/*.py
+# Also compile test files in subdirectories (if any exist)
 for tf in delivery-pattern-demos/*/tests/*.py bootstrap-pattern-demos/*/tests/*.py; do
-  [ -f "$tf" ] && python3 -m py_compile "$tf"
+  python3 -m py_compile "$tf"
 done
 
 echo "== cone-of-silence: engine demo (cone.py demo) =="
@@ -75,6 +76,17 @@ if docker info >/dev/null 2>&1; then
     echo "   ✓ reader connected; rotated; the exfiltrated credential was rejected" )
 else
   echo "   ⚪ Docker not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
+echo "== broker-sidecar: live OpenBao demo =="
+if docker info >/dev/null 2>&1; then
+  ( cd delivery-pattern-demos/broker-sidecar
+    trap 'docker compose down -v >/dev/null 2>&1 || true' EXIT
+    python3 demo.py >/dev/null 2>&1 \
+      || { echo "FAIL: broker-sidecar demo.py did not exit 0"; exit 1; }
+    echo "   ✓ broker fetched, rendered, rotated, reader saw both values" )
+else
+  echo "   ⚪ Docker not available — skipping broker-sidecar live demo"
 fi
 
 echo "✅ validate.sh: all checks passed"

@@ -1,0 +1,11 @@
+# Real OpenBao (dev mode) for the broker-sidecar demo.
+#
+# The root token is an OBVIOUS dev value — this is the demo's BOOTSTRAP SECRET.
+# How you'd really anchor it is out of scope (see README "Bootstrap secret — out of scope").
+# Non-default host port (58201) so this never collides with other demos or a local OpenBao.
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: ["IPC_LOCK"]
+    ports: ["58201:8200"]

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Broker Sidecar — why &amp; what</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; color: #a5d6ff; }
+  a { color: #58a6ff; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; text-decoration:none; }
+
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.88rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.dim  { color:#8b949e; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+  .note { color:#8b949e; font-size:.9rem; margin:.8rem .2rem 0; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1rem 0; }
+  @media (max-width:680px){ .grid{ grid-template-columns:1fr; } }
+  table.cmp { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.95rem; }
+  table.cmp th, table.cmp td { border:1px solid #30363d; padding:.5rem .7rem; text-align:left; vertical-align:top; }
+  table.cmp th { background:#161b22; color:#c9d1d9; }
+  table.cmp td.good { color:#7ee787; } table.cmp td.shim { color:#d2a8ff; }
+
+  .miti { background:#0f141b; border:1px solid #30363d; border-left:3px solid #d2a8ff;
+          border-radius:8px; padding:.85rem 1.1rem; margin:.9rem 0; }
+  .miti h3 { margin:0 0 .3rem; color:#d2a8ff; font-size:1.05rem; }
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+
+  .cards { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin:1rem 0; }
+  @media (max-width:680px){ .cards{ grid-template-columns:1fr; } }
+  .card { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem; }
+  .card h3 { margin:0 0 .4rem; color:#ffa657; font-size:1rem; }
+  .card p { margin:0; font-size:.92rem; color:#c9d1d9; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Broker Sidecar</h1>
+  <p class="sub">generalized vault-materialization: any secret, any template, any app</p>
+
+  <p class="lead">A sidecar process authenticates to the vault, fetches any secret, renders it
+     through a template into the file the app reads, and watches for rotation. The app never
+     changes &mdash; only what&rsquo;s behind its config file.</p>
+
+  <nav>
+    <a href="#problem">The problem</a>
+    <a href="#idea">The idea</a>
+    <a href="#vs-shim">Shim vs broker</a>
+    <a href="#tradeoffs">Tradeoffs</a>
+    <a href="#related">Related</a>
+    <a href="deck.html">&#9654; the walk-through (how)</a>
+  </nav>
+
+  <h2 id="problem">The problem</h2>
+  <p>A legacy app reads credentials from a config file in its own format. The credential must come
+     from a vault (for rotation, auditability, short-lived access), rendered into <em>that format</em>,
+     and refreshed when the secret rotates &mdash; all without touching the app&rsquo;s code.</p>
+  <p>The <a href="../dynamic-credential-shim/enlighten.html">dynamic-credential-shim</a> solved a
+     special case: one secret type (database static-creds), one output (JSON). But real estates have
+     dozens of apps reading dozens of formats. We need the <strong>general pattern</strong>.</p>
+
+  <h2 id="idea">The idea: a block diagram</h2>
+  <div class="diagrams">
+    <figure class="panel" style="grid-column: 1 / -1;">
+      <figcaption>Broker Sidecar &mdash; the data flow</figcaption>
+      <div class="flow">
+        <div class="box">OpenBao / Vault<small>KV v2 &middot; any secret engine</small></div>
+        <div class="arrow">&darr;<span>authenticated fetch (token, AppRole, K8s auth&hellip;)</span></div>
+        <div class="box good">Broker Sidecar<small>poll &middot; fetch &middot; template &middot; write &middot; watch</small></div>
+        <div class="arrow">&darr;<span>Jinja2 render</span></div>
+        <div class="box good">Rendered config file<small>app&rsquo;s native format (INI, YAML, JSON, .env&hellip;)</small></div>
+        <div class="arrow">&darr;<span>read (unchanged app)</span></div>
+        <div class="box">Legacy App<small>connects using whatever it finds in the file</small></div>
+      </div>
+      <p class="note">On rotation: vault gets a new secret version &rarr; broker detects on next poll &rarr;
+         re-renders the template &rarr; file is updated &rarr; app reconnects with fresh credential.</p>
+    </figure>
+  </div>
+
+  <h2 id="vs-shim">How this generalizes the shim</h2>
+  <table class="cmp">
+    <tr><th></th><th>Dynamic-credential-shim</th><th>Broker sidecar <em>(this pattern)</em></th></tr>
+    <tr><td>Secret source</td><td class="shim">database/static-creds (one engine)</td><td class="good">any KV v2 path (or any engine)</td></tr>
+    <tr><td>Output format</td><td class="shim">hardcoded JSON</td><td class="good">Jinja2 template (any format)</td></tr>
+    <tr><td>Rotation</td><td class="shim">manual re-run</td><td class="good">automatic poll + re-render</td></tr>
+    <tr><td>Lifecycle</td><td class="shim">one-shot script</td><td class="good">long-running sidecar with signal handling</td></tr>
+    <tr><td>Scope</td><td class="shim">Postgres credentials only</td><td class="good">any secret shape the vault stores</td></tr>
+  </table>
+  <p>The shim is a <em>special case</em> of the broker &mdash; a broker whose template is hardcoded
+     and whose source is a single engine. The sidecar trades that simplicity for universality.</p>
+
+  <h2 id="tradeoffs">Tradeoffs</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>Operational dependency</h3>
+      <p>The broker must reach the vault to fetch secrets. If the vault is unreachable, the sidecar
+         cannot render fresh credentials. (Existing rendered files remain usable until rotation.)</p>
+    </div>
+    <div class="card">
+      <h3>Plaintext on disk</h3>
+      <p>The rendered config file contains the secret in cleartext. Pair with the
+         <a href="../cone-of-silence/enlighten.html">Cone of Silence</a> to keep it RAM-only.</p>
+    </div>
+    <div class="card">
+      <h3>Bootstrap out of scope</h3>
+      <p>How the broker itself authenticates to the vault (the bootstrap secret) is a separate
+         concern &mdash; see the bootstrap-pattern family in the decision guide.</p>
+    </div>
+  </div>
+
+  <h2 id="related">Related concepts</h2>
+  <ul>
+    <li><strong><a href="../dynamic-credential-shim/enlighten.html">Dynamic Credential Shim</a></strong>
+        &mdash; the special case this pattern generalizes (database-only, JSON-only, one-shot).</li>
+    <li><strong><a href="../cone-of-silence/enlighten.html">Cone of Silence</a></strong> &mdash;
+        deliver the rendered file into RAM so plaintext never touches persistent disk.</li>
+    <li><strong>bootstrap-secret family</strong> (planned) &mdash; how the broker authenticates to
+        the vault without a stored secret.</li>
+  </ul>
+
+  <h2>Bootstrap secret &mdash; out of scope</h2>
+  <p>This demo hardcodes its bootstrap secret &mdash; the OpenBao dev root token
+     (<code>dev-only-root-token</code>) &mdash; obviously and on purpose. How the broker would really
+     authenticate to OpenBao <em>without</em> a stored secret (AppRole, Kubernetes auth, cloud IAM)
+     is an orthogonal concern addressed by the bootstrap-secret pattern family. Conflating it here
+     would obscure this pattern&rsquo;s lesson.</p>
+
+  <p class="foot">
+     This page is the <strong>why &amp; what</strong>. The <strong>how</strong> is the terminal
+     walk-through &mdash; open <a href="deck.html"><code>deck.html</code></a>. Source:
+     <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.
+  </p>
+</main>
+</body>
+</html>
