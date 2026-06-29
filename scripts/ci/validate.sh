@@ -115,4 +115,14 @@ else
   echo "   ⚪ systemd-creds or swtpm not available — skipping TPM demo (py_compile + decks still validated)"
 fi
 
+echo "== approle-response-wrapping: live OpenBao + AppRole + Ansible demo =="
+if docker info >/dev/null 2>&1 && command -v ansible-playbook >/dev/null 2>&1; then
+  ( cd bootstrap-pattern-demos/approle-response-wrapping
+    python3 demo.py \
+      || { echo "FAIL: approle-response-wrapping demo.py failed"; exit 1; }
+    echo "   ✓ wrap+deliver; unwrap+auth; replay rejected; expired rejected" )
+else
+  echo "   ⚪ Docker/Ansible not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
 echo "✅ validate.sh: all checks passed"

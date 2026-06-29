@@ -1,0 +1,15 @@
+# Real OpenBao for the approle-response-wrapping bootstrap demo.
+#
+# The root token here is an OBVIOUS dev value — it IS the bootstrap secret this pattern
+# addresses. Non-default host port (58201) so this never collides with other demos.
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: ["IPC_LOCK"]
+    ports: ["58201:8200"]
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

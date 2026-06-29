@@ -1,0 +1,12 @@
+# Ansible inventory for the approle-response-wrapping demo.
+# localhost only — the demo delivers the wrapped token to itself.
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      bao_addr: "http://127.0.0.1:58201"
+      bao_token: "dev-only-root-token"
+      approle_name: "demo-app"
+      wrap_ttl: "30s"
+      token_dest: "{{ playbook_dir }}/run/wrapped-token"
