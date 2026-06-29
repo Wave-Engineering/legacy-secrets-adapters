@@ -171,7 +171,7 @@ def fetch_and_render():
 def rotate_and_rerender():
     if not _stack_up():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
-    coach("Simulate rotation: write a new version of the secret to KV v2.")
+    coach("Force secret rotation: write a new version of the secret to KV v2.")
     bao_request("POST", f"{KV_MOUNT}/data/{KV_PATH}", {"data": ROTATED_SECRET})
     print(DIM("    new secret version written (password: R0tated-Pg-Pass-v2)"))
     coach("The broker fetches again — detects the new version — re-renders:")
@@ -207,7 +207,7 @@ def menu():
     print("  0) Enlighten me                  " + DIM("(open the slide deck)"))
     print("  1) Bring up OpenBao + seed       " + DIM("(docker compose up + write KV secret)"))
     print("  2) Fetch, render, read           " + DIM("(broker fetches + templates -> reader reads)"))
-    print("  3) Rotate & re-render            " + DIM("(write new KV version -> broker detects -> re-renders)"))
+    print("  3) Force secret rotation          " + DIM("(write new KV version -> broker detects -> re-renders)"))
     print("  4) Tear down                     " + DIM("(docker compose down -v)"))
     print("  " + (GREEN("5) Finish") if _all_done() else "5) Abort"))
 
