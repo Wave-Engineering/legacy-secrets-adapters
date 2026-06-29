@@ -71,6 +71,15 @@ user, systemd sandboxing, mount namespaces, no-swap/`mlock`, `ptrace` restrictio
   username — friendliest to a legacy connection pool) or a dynamic role. The static-vs-dynamic decision and the
   single-OpenBao availability caveats are worked through in `NOTES.md`.
 
+## Bootstrap secret — out of scope
+
+This demo hardcodes its bootstrap secret — the decryption key, `cone.key` — obviously and on purpose
+(it's loudly labeled "DEMO ONLY" in `cone.py`). How a materializer authenticates to its key source
+*without* a stored secret (here: how that key would really be sealed to a TPM or handed over by
+OpenBao) — the turtles-to-silicon problem — is an orthogonal concern addressed by the bootstrap-secret
+pattern family (see [`../../docs/decision-guide.md`](../../docs/decision-guide.md)). Conflating the two
+would obscure this pattern's lesson.
+
 ## Related patterns (planned)
 
 - **broker-sidecar** — materialize from OpenBao/Vault for an unchanged file-reader

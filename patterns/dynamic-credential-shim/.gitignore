@@ -1,0 +1,4 @@
+# Runtime artifacts produced by the demo — never commit.
+run/
+__pycache__/
+*.pyc

@@ -49,6 +49,14 @@ List the residual exposure and the mitigations that layer on top.>
 <How this looks in a real deployment vs. the demo — key custody, isolation,
 rotation, etc.>
 
+## Bootstrap secret — out of scope
+
+This demo hardcodes its bootstrap secret (here: `<name the obvious dev value — e.g. the Vault dev
+token>`) obviously and on purpose. How a materializer/broker authenticates to its key source *without*
+a stored secret — the turtles-to-silicon problem — is an orthogonal concern addressed by the
+bootstrap-secret pattern family (see [`docs/decision-guide.md`](../../docs/decision-guide.md)).
+Conflating the two would obscure this pattern's lesson.
+
 ## Related patterns
 
 - **<other-pattern>** — <one-line essence and when you'd reach for it instead>

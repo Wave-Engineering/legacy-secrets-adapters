@@ -20,7 +20,7 @@ demo. Read this at session start.
 
 - **Host:** GitHub (`gh` CLI). **Default branch:** `main`. Say "PR".
 - **Issue-first.** Never start work without an issue. Branch `type/<issue#>-slug`
-  (`feat` / `fix` / `docs` / `chore`); PR targets `main`. No direct commits to `main`.
+  (`feature` / `fix` / `doc` / `chore` / `bug` — prefixes are singular); PR targets `main`. No direct commits to `main`.
 - **On merge, close all linked issues** (`Closes #N`) and verify closure.
 - **Commit identity:** this is GitHub, so the GitLab verified-email rule does NOT apply — commit
   as the global git identity.

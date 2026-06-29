@@ -1,0 +1,26 @@
+# Real OpenBao + Postgres for the dynamic-credential-shim demo.
+#
+# BOTH secrets here are OBVIOUS dev values and are the demo's BOOTSTRAP SECRETS —
+# how you'd really anchor them is out of scope (see README "Bootstrap secret — out of scope").
+# Non-default host ports (55432 / 58200) so this never collides with a local PG/OpenBao.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: bootstrap-only-pg-superpw   # bootstrap secret (obvious dev value)
+      POSTGRES_DB: appdb
+    ports: ["55432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  openbao:
+    image: openbao/openbao:2.5.0
+    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: ["IPC_LOCK"]
+    ports: ["58200:8200"]
+    depends_on:
+      postgres:
+        condition: service_healthy

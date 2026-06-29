@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# WTF flight recorder — local tooling artifact, never commit
+.wtf/
