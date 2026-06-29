@@ -41,7 +41,8 @@ def bao_request(path, method="GET", data=None, token=None, wrap_ttl=None):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+            body = resp.read()
+            return json.loads(body) if body else {}
     except urllib.error.HTTPError as e:
         error_body = e.read().decode() if e.fp else ""
         raise RuntimeError(f"OpenBao {method} {path}: HTTP {e.code} — {error_body}") from e
