@@ -3,7 +3,7 @@
 *<one-line essence — the metaphor, and what it does in plain terms>*
 
 <!--
-  Copy this directory to patterns/<your-pattern-name>/ (kebab-case) and fill in
+  Copy this directory to delivery-pattern-demos/<your-pattern-name>/ (kebab-case) and fill in
   the sections below. Keep the skeleton headings in this order — consistency
   across patterns is what makes the catalog navigable. Delete these comments.
 -->
