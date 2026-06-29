@@ -335,6 +335,9 @@ def main():
         action()
         pause()
 
+    if done.get("up"):
+        tear_down()
+
 
 if __name__ == "__main__":
     main()

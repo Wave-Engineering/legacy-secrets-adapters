@@ -225,6 +225,8 @@ def main():
         except EOFError:
             break
         if choice == "5":
+            if _stack_up():
+                tear_down()
             print(GREEN("\n  Finished — secrets delivered through a sidecar broker.")
                   if _all_done() else DIM("\n  Aborted."))
             break

@@ -215,5 +215,8 @@ def main():
         action()
         pause()
 
+    if _stack_up():
+        tear_down()
+
 if __name__ == "__main__":
     main()
