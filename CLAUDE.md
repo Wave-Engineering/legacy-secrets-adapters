@@ -54,6 +54,7 @@ bootstrap-pattern-demos/<name>/      bootstrap pattern: README + runnable demo (
 <tree>/_template/                    copy-me skeleton for a new pattern (one per axis)
 tools/build_deck.py                  render a pattern's walkthrough.py -> a self-contained, deterministic deck.html
 scripts/ci/validate.sh               smoke-test the catalog (the local-testing entry point)
+skills/secrets-advisor/SKILL.md      Socratic advisory skill — pattern selection through dialogue
 docs/decision-guide.md               which pattern fits a given situation
 docs/sketchbook.md                   design intentions per planned pattern (spec source for the wave campaign)
 CONTRIBUTING.md                      how to add a pattern + conventions
