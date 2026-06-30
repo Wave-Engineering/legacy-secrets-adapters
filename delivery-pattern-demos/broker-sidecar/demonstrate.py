@@ -181,6 +181,28 @@ def rotate_and_rerender():
     coach("The legacy reader sees the new value — untouched code, new secret:")
     run_reader()
 
+def grep_disk():
+    if not OUTPUT.exists():
+        print(DIM("    (no rendered file yet — choose 2 first)")); return
+    coach("The broker wrote the rendered config to a regular file. Can we find the secret?")
+    print(DIM(f"    grep 'password' {OUTPUT.relative_to(HERE)}"))
+    content = OUTPUT.read_text()
+    for line in content.splitlines():
+        if "password" in line.lower() or "S3cr3t" in line or "R0tated" in line:
+            print(RED(f"    {line.strip()}"))
+        else:
+            print(DIM(f"    {line.strip()}"))
+    verdict(
+        "The credential is plaintext on disk RIGHT NOW.\n"
+        "    The broker's protection is temporal, not spatial: this password\n"
+        "    will be replaced on the next KV version bump. A stolen copy has\n"
+        "    a shelf life — but it IS readable until rotation fires.", ok=False)
+    coach("Defence in Depth: couple with cone-of-silence (render to a tmpfs\n"
+          "RAM path instead of a regular file) for temporal + spatial protection.\n"
+          "The broker rotates the credential; the Cone ensures there's nothing\n"
+          "to steal from persistent storage in the first place.")
+
+
 def tear_down():
     coach("Tear the stack down (the container is disposable).")
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE)
@@ -207,15 +229,16 @@ def menu():
     print("  0) Enlighten me                  " + DIM("(open the slide deck)"))
     print("  1) Bring up OpenBao + seed       " + DIM("(docker compose up + write KV secret)"))
     print("  2) Fetch, render, read           " + DIM("(broker fetches + templates -> reader reads)"))
-    print("  3) Force secret rotation          " + DIM("(write new KV version -> broker detects -> re-renders)"))
-    print("  4) Tear down                     " + DIM("(docker compose down -v)"))
-    print("  " + (GREEN("5) Finish") if _all_done() else "5) Abort"))
+    print("  3) Force secret rotation         " + DIM("(write new KV version -> broker detects -> re-renders)"))
+    print("  4) Grep the disk                 " + DIM("(find the secret on disk — the honest tradeoff)"))
+    print("  5) Tear down                     " + DIM("(docker compose down -v)"))
+    print("  " + (GREEN("6) Finish") if _all_done() else "6) Abort"))
 
 def main():
     os.chdir(HERE)
     shutil.rmtree(HERE / "__pycache__", ignore_errors=True)
     actions = {"0": enlighten, "1": bring_up, "2": fetch_and_render,
-               "3": rotate_and_rerender, "4": tear_down}
+               "3": rotate_and_rerender, "4": grep_disk, "5": tear_down}
     while True:
         clear_screen()
         menu()
@@ -224,7 +247,7 @@ def main():
             choice = input().strip()
         except EOFError:
             break
-        if choice == "5":
+        if choice == "6":
             if _stack_up():
                 tear_down()
             print(GREEN("\n  Finished — secrets delivered through a sidecar broker.")

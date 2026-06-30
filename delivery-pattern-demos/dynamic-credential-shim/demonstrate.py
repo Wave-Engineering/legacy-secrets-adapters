@@ -152,6 +152,28 @@ def rotate_and_leak():
     shell("./legacy_reader.py")
     done["rotate"] = True
 
+def grep_disk():
+    if not RUN_CFG.exists():
+        print(DIM("    (no rendered file yet — choose 2 first)")); return
+    coach("The shim wrote the credential to a regular file. Can we find it on disk?")
+    print(DIM(f"    grep 'password' {RUN_CFG.relative_to(HERE)}"))
+    content = RUN_CFG.read_text()
+    for line in content.splitlines():
+        if "password" in line.lower():
+            print(RED(f"    {line.strip()}"))
+        else:
+            print(DIM(f"    {line.strip()}"))
+    verdict(
+        "The credential is plaintext on disk RIGHT NOW.\n"
+        "    The shim's protection is temporal, not spatial: this password\n"
+        "    will be dead after the next rotation window. A stolen copy\n"
+        "    has a shelf life — but it IS readable until then.", ok=False)
+    coach("Defence in Depth: couple with cone-of-silence (write to a tmpfs\n"
+          "RAM path instead of a regular file) for temporal + spatial protection.\n"
+          "Rotation kills leaked copies; the Cone ensures there's nothing to leak\n"
+          "from disk in the first place.")
+
+
 def explore():
     sh = os.environ.get("SHELL", "/bin/bash")
     coach(BOLD("Explorer — forking a shell. Try ") + "\033[36mbao read database/static-creds/" + ROLE
@@ -188,15 +210,16 @@ def menu():
     print("  1) Bring up OpenBao + Postgres   " + DIM("(docker compose up + configure the static role)"))
     print("  2) Read the secret               " + DIM("(shim fetches → unchanged reader connects)"))
     print("  3) Rotate & watch the leak die   " + DIM("(exfiltrate → rotate → old credential fails)"))
-    print("  4) Explore                       " + DIM("(fork a shell; type 'exit' to return)"))
-    print("  5) Tear down                     " + DIM("(docker compose down -v)"))
-    print("  " + (GREEN("6) Finish") if _all_done() else "6) Abort"))
+    print("  4) Grep the disk                 " + DIM("(find the secret on disk — the honest tradeoff)"))
+    print("  5) Explore                       " + DIM("(fork a shell; type 'exit' to return)"))
+    print("  6) Tear down                     " + DIM("(docker compose down -v)"))
+    print("  " + (GREEN("7) Finish") if _all_done() else "7) Abort"))
 
 def main():
     os.chdir(HERE)
     shutil.rmtree(HERE / "__pycache__", ignore_errors=True)
     actions = {"0": enlighten, "1": bring_up, "2": read_secret,
-               "3": rotate_and_leak, "4": explore, "5": tear_down}
+               "3": rotate_and_leak, "4": grep_disk, "5": explore, "6": tear_down}
     while True:
         clear_screen()
         menu()
@@ -205,7 +228,7 @@ def main():
             choice = input().strip()
         except EOFError:
             break
-        if choice == "6":
+        if choice == "7":
             print(GREEN("\n  Finished — a leaked credential now has a shelf life. \U0001f44b")
                   if _all_done() else DIM("\n  Aborted."))
             break
