@@ -321,14 +321,14 @@ def action_teardown():
 
 
 def action_enlighten():
-    if not DECK.exists():
-        print(DIM(f"    deck not found — build it: python3 ../../tools/build_deck.py "
-                  f"bootstrap-pattern-demos/tpm-sealed-bootstrap")); return
+    writeup = HERE / "enlighten.html"
+    if not writeup.exists():
+        print(DIM(f"    enlighten.html not found")); return
     for opener in ("xdg-open", "sensible-browser", "open"):
         if _have(opener):
-            subprocess.run([opener, str(DECK)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(DIM(f"    opened {DECK.name} in your browser")); return
-    print(DIM(f"    no GUI opener found — open this yourself: file://{DECK}"))
+            subprocess.run([opener, str(writeup)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(DIM(f"    opened {writeup.name} in your browser")); return
+    print(DIM(f"    no GUI opener found — open this yourself: file://{writeup}"))
 
 
 # --- menu --------------------------------------------------------------------
@@ -341,7 +341,7 @@ def menu():
     print("\n" + BOLD("==== TPM-Sealed Bootstrap -- an experience ===="))
     print(f"     swtpm: {s}     [{seal_m}] seal  [{unseal_m}] unseal  [{auth_m}] auth  [{tamper_m}] tamper")
     print()
-    print("  0) Enlighten me                " + DIM("(open the slide deck)"))
+    print("  0) Enlighten me                " + DIM("(open the concept page)"))
     print("  1) Seal credential to TPM      " + DIM("(systemd-creds encrypt with swtpm)"))
     print("  2) Unseal via TPM              " + DIM("(systemd-creds decrypt — simulates LoadCredentialEncrypted)"))
     print("  3) Authenticate to OpenBao     " + DIM("(materializer reads from $CREDENTIALS_DIRECTORY)"))

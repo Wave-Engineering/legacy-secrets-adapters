@@ -209,14 +209,14 @@ def tear_down():
     done["up"] = False
 
 def enlighten():
-    deck = HERE / "deck.html"
-    if not deck.exists():
-        print(DIM(f"    deck not found — build it: python3 ../../tools/build_deck.py {HERE.name}")); return
+    writeup = HERE / "enlighten.html"
+    if not writeup.exists():
+        print(DIM(f"    enlighten.html not found")); return
     for opener in ("xdg-open", "sensible-browser", "open"):
         if shutil.which(opener):
-            subprocess.run([opener, str(deck)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(DIM(f"    opened {deck.name} in your browser")); return
-    print(DIM(f"    no GUI opener found — open this yourself: file://{deck}"))
+            subprocess.run([opener, str(writeup)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(DIM(f"    opened {writeup.name} in your browser")); return
+    print(DIM(f"    no GUI opener found — open this yourself: file://{writeup}"))
 
 # --- menu -------------------------------------------------------------------
 def menu():
@@ -226,7 +226,7 @@ def menu():
     print("\n" + BOLD("==== The Broker Sidecar — an experience ===="))
     print(f"     Stack: {up}     Rendered: {r}     Rotated: {rot}")
     print()
-    print("  0) Enlighten me                  " + DIM("(open the slide deck)"))
+    print("  0) Enlighten me                  " + DIM("(open the concept page)"))
     print("  1) Bring up OpenBao + seed       " + DIM("(docker compose up + write KV secret)"))
     print("  2) Fetch, render, read           " + DIM("(broker fetches + templates -> reader reads)"))
     print("  3) Force secret rotation         " + DIM("(write new KV version -> broker detects -> re-renders)"))

@@ -28,7 +28,7 @@ BAO_ADDR = "http://127.0.0.1:58201"
 BAO_TOKEN = "dev-only-root-token"  # BOOTSTRAP SECRET (obvious dev value)
 APPROLE_NAME = "demo-app"
 WRAP_TTL = "30s"
-WRITEUP = HERE / "deck.html"
+WRITEUP = HERE / "enlighten.html"
 
 os.environ["BAO_ADDR"] = BAO_ADDR
 os.environ["BAO_TOKEN"] = BAO_TOKEN
@@ -261,7 +261,7 @@ def menu():
     print("\n" + BOLD("==== AppRole Response-Wrapping — an experience ===="))
     print(f"     Stack: {up}     Experienced:  [{w}] wrap+auth   [{r}] replay-fail")
     print()
-    print("  0) Enlighten me                   " + DIM("(open the slide deck)"))
+    print("  0) Enlighten me                   " + DIM("(open the concept page)"))
     print("  1) Bring up OpenBao + AppRole     " + DIM("(docker compose up + configure)"))
     print("  2) Wrap & deliver (Ansible)       " + DIM("(playbook wraps SecretID → materializer authenticates)"))
     print("  3) Replay & expiry test           " + DIM("(consumed token rejected + expired token rejected)"))

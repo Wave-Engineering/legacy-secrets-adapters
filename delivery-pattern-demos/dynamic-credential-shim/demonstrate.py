@@ -27,7 +27,7 @@ os.environ["BAO_ADDR"] = "http://127.0.0.1:58200"
 os.environ["BAO_TOKEN"] = "dev-only-root-token"   # BOOTSTRAP SECRET (obvious dev value)
 
 ROLE = "app-static"
-WRITEUP = HERE / "deck.html"
+WRITEUP = HERE / "enlighten.html"
 RUN_CFG = HERE / "run" / "secrets.json"
 
 # --- pretty (same visual grammar as cone-of-silence) ------------------------
@@ -206,7 +206,7 @@ def menu():
     print("\n" + BOLD("════ The Dynamic Credential Shim — an experience ════"))
     print(f"     Stack: {up}     Experienced:  [{r}] managed-read   [{rot}] rotation")
     print()
-    print("  0) Enlighten me                  " + DIM("(open the slide deck)"))
+    print("  0) Enlighten me                  " + DIM("(open the concept page)"))
     print("  1) Bring up OpenBao + Postgres   " + DIM("(docker compose up + configure the static role)"))
     print("  2) Read the secret               " + DIM("(shim fetches → unchanged reader connects)"))
     print("  3) Rotate & watch the leak die   " + DIM("(exfiltrate → rotate → old credential fails)"))

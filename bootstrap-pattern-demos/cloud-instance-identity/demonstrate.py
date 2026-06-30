@@ -32,7 +32,7 @@ BAO_TOKEN = "dev-only-root-token"
 SECRET_VALUE = "S3cr3t-Pg-Pass"
 SECRET_PATH = "secret/data/demo/db-password"
 OUTPUT_FILE = HERE / "run" / "secret.json"
-WRITEUP = HERE / "deck.html"
+WRITEUP = HERE / "enlighten.html"
 
 os.environ["AWS_METADATA_URL"] = f"http://127.0.0.1:{MOCK_PORT}"
 os.environ["BAO_ADDR"] = BAO_ADDR
@@ -302,7 +302,7 @@ def menu():
     print("\n" + BOLD("==== Cloud Instance Identity - an experience ===="))
     print(f"     Stack: {up}     Experienced:  {m} metadata  {mat} materialize  {rot} rotation")
     print()
-    print("  0) Enlighten me                        " + DIM("(open the slide deck)"))
+    print("  0) Enlighten me                        " + DIM("(open the concept page)"))
     print("  1) Bring up OpenBao + mock metadata    " + DIM("(docker compose up + configure)"))
     print("  2) Show IMDSv2 flow                    " + DIM("(PUT token → GET credentials)"))
     print("  3) Run the materializer                " + DIM("(metadata → OpenBao auth → secret)"))
