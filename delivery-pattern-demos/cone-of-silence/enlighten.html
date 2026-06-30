@@ -69,6 +69,18 @@
                  padding:.6rem .9rem; margin:.5rem 0; }
   ul.writes em { color:#8b949e; font-style:normal; }
 
+  .metrics { background:#0f141b; border:1px solid #30363d; border-radius:10px;
+             padding:1rem 1.2rem; margin:1.8rem 0 .5rem; }
+  .metrics-title { margin:0 0 .7rem; font-size:.8rem; color:#8b949e; text-transform:uppercase;
+                   letter-spacing:.05em; font-weight:600; }
+  .metrics-title span { float:right; font-size:.65rem; font-weight:400; color:#484f58; text-transform:none; letter-spacing:0; }
+  .metric { display:flex; align-items:center; gap:.6rem; margin:.5rem 0; }
+  .metric-label { width:6rem; font-size:.8rem; color:#c9d1d9; text-align:right; flex-shrink:0; }
+  .metric-bar { flex:1; height:6px; background:linear-gradient(to right, #3fb950, #d29922, #f85149);
+                border-radius:3px; position:relative; }
+  .metric-bar .dot { position:absolute; top:50%; width:12px; height:12px; background:#e6edf3;
+                     border-radius:50%; border:2px solid #0d1117; transform:translate(-50%,-50%); }
+
   .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
 </style>
 </head>
@@ -86,6 +98,22 @@
     <a href="#writes">What about writes?</a>
     <a href="#prod">In production</a>
   </nav>
+
+  <div class="metrics" aria-label="Pattern metrics at a glance">
+    <p class="metrics-title">at a glance <span>left = good</span></p>
+    <div class="metric">
+      <span class="metric-label">Complexity</span>
+      <div class="metric-bar"><span class="dot" style="left:25%"></span></div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Security</span>
+      <div class="metric-bar"><span class="dot" style="left:20%"></span></div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Ops burden</span>
+      <div class="metric-bar"><span class="dot" style="left:20%"></span></div>
+    </div>
+  </div>
 
   <h2 id="problem">The problem</h2>
   <p>A legacy application reads its credentials from a plaintext file on disk — say

@@ -42,6 +42,18 @@
   .card.pro { border-color: #2ea04355; } .card.con { border-color: #f8514955; }
   .pro h3 { color: #7ee787; } .con h3 { color: #ff7b72; }
 
+  .metrics { background:#0f141b; border:1px solid #30363d; border-radius:10px;
+             padding:1rem 1.2rem; margin:1.8rem 0 .5rem; }
+  .metrics-title { margin:0 0 .7rem; font-size:.8rem; color:#8b949e; text-transform:uppercase;
+                   letter-spacing:.05em; font-weight:600; }
+  .metrics-title span { float:right; font-size:.65rem; font-weight:400; color:#484f58; text-transform:none; letter-spacing:0; }
+  .metric { display:flex; align-items:center; gap:.6rem; margin:.5rem 0; }
+  .metric-label { width:6rem; font-size:.8rem; color:#c9d1d9; text-align:right; flex-shrink:0; }
+  .metric-bar { flex:1; height:6px; background:linear-gradient(to right, #3fb950, #d29922, #f85149);
+                border-radius:3px; position:relative; }
+  .metric-bar .dot { position:absolute; top:50%; width:12px; height:12px; background:#e6edf3;
+                     border-radius:50%; border:2px solid #0d1117; transform:translate(-50%,-50%); }
+
   .spectrum { display:flex; align-items:center; gap:.5rem; margin:1.2rem 0; padding:1rem;
               background:#0f141b; border:1px solid #30363d; border-radius:10px; }
   .spectrum .bar { flex:1; height:8px; background: linear-gradient(to right, #3fb950, #d2a8ff, #f85149);
@@ -71,6 +83,22 @@
     <a href="#related">Related</a>
     <a href="deck.html">the walkthrough (how)</a>
   </nav>
+
+  <div class="metrics" aria-label="Pattern metrics at a glance">
+    <p class="metrics-title">at a glance <span>left = good</span></p>
+    <div class="metric">
+      <span class="metric-label">Complexity</span>
+      <div class="metric-bar"><span class="dot" style="left:85%"></span></div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Security</span>
+      <div class="metric-bar"><span class="dot" style="left:70%"></span></div>
+    </div>
+    <div class="metric">
+      <span class="metric-label">Ops burden</span>
+      <div class="metric-bar"><span class="dot" style="left:70%"></span></div>
+    </div>
+  </div>
 
   <h2 id="problem">The problem</h2>
   <p>A legacy app reads its credentials from a <strong>plaintext file</strong> and won't be
