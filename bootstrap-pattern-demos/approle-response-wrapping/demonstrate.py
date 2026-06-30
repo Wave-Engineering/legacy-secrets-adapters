@@ -307,26 +307,28 @@ def main():
     shutil.rmtree(HERE / "__pycache__", ignore_errors=True)
     actions = {"0": enlighten, "1": bring_up, "2": wrap_and_deliver,
                "3": replay_and_expire, "4": explore, "5": tear_down}
-    while True:
-        clear_screen()
-        menu()
-        print("\n  Please select: ", end="", flush=True)
-        try:
-            choice = input().strip()
-        except EOFError:
-            break
-        if choice == "6":
-            print(GREEN("\n  Finished — a single-use wrapped token kills replay. \U0001f44b")
-                  if _all_done() else DIM("\n  Aborted."))
-            break
-        action = actions.get(choice)
-        if not action:
-            continue
-        action()
-        pause()
-
-    if done.get("up"):
-        tear_down()
+    try:
+        while True:
+            clear_screen()
+            menu()
+            print("\n  Please select: ", end="", flush=True)
+            try:
+                choice = input().strip()
+            except EOFError:
+                break
+            if choice == "6":
+                print(GREEN("\n  Finished — a single-use wrapped token kills replay. \U0001f44b")
+                      if _all_done() else DIM("\n  Aborted."))
+                break
+            action = actions.get(choice)
+            if not action:
+                continue
+            action()
+            pause()
+    finally:
+        if _stack_up():
+            print(DIM("\n    Cleaning up infrastructure..."))
+            subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
 
 
 if __name__ == "__main__":
