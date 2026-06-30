@@ -344,26 +344,30 @@ def main():
     shutil.rmtree(HERE / "__pycache__", ignore_errors=True)
     actions = {"0": enlighten, "1": bring_up, "2": show_metadata,
                "3": run_materializer, "4": show_rotation, "5": explore, "6": tear_down}
-    while True:
-        clear_screen()
-        menu()
-        print("\n  Please select: ", end="", flush=True)
-        try:
-            choice = input().strip()
-        except EOFError:
-            break
-        if choice == "7":
-            print(GREEN("\n  Finished — the machine's identity IS the bootstrap secret. No secret stored.")
-                  if _all_done() else DIM("\n  Aborted."))
-            break
-        action = actions.get(choice)
-        if not action:
-            continue
-        action()
-        pause()
-
-    if done.get("up"):
-        tear_down()
+    try:
+        while True:
+            clear_screen()
+            menu()
+            print("\n  Please select: ", end="", flush=True)
+            try:
+                choice = input().strip()
+            except EOFError:
+                break
+            if choice == "7":
+                print(GREEN("\n  Finished — the machine's identity IS the bootstrap secret. No secret stored.")
+                      if _all_done() else DIM("\n  Aborted."))
+                break
+            action = actions.get(choice)
+            if not action:
+                continue
+            action()
+            pause()
+    finally:
+        if mock_server:
+            mock_server.shutdown()
+        if _stack_up():
+            print(DIM("\n    Cleaning up infrastructure..."))
+            subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
 
 
 if __name__ == "__main__":

@@ -276,25 +276,28 @@ def main():
     shutil.rmtree(HERE / "__pycache__", ignore_errors=True)
     actions = {"0": enlighten, "1": bring_up, "2": fetch_and_render,
                "3": rotate_and_rerender, "4": grep_disk, "5": tear_down}
-    while True:
-        clear_screen()
-        menu()
-        print("\n  Please select: ", end="", flush=True)
-        try:
-            choice = input().strip()
-        except EOFError:
-            break
-        if choice == "6":
-            if _stack_up():
-                tear_down()
-            print(GREEN("\n  Finished — secrets delivered through a sidecar broker.")
-                  if _all_done() else DIM("\n  Aborted."))
-            break
-        action = actions.get(choice)
-        if not action:
-            continue
-        action()
-        pause()
+    try:
+        while True:
+            clear_screen()
+            menu()
+            print("\n  Please select: ", end="", flush=True)
+            try:
+                choice = input().strip()
+            except EOFError:
+                break
+            if choice == "6":
+                print(GREEN("\n  Finished — secrets delivered through a sidecar broker.")
+                      if _all_done() else DIM("\n  Aborted."))
+                break
+            action = actions.get(choice)
+            if not action:
+                continue
+            action()
+            pause()
+    finally:
+        if _stack_up():
+            print(DIM("\n    Cleaning up infrastructure..."))
+            subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
 
 if __name__ == "__main__":
     main()
