@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+
+          # Shell files
+          cp site/index.html site/style.css _site/
+
+          # Delivery patterns
+          for pattern in fifo-stream cone-of-silence dynamic-credential-shim broker-sidecar fuse-decrypt; do
+            mkdir -p "_site/delivery/${pattern}"
+            cp "delivery-pattern-demos/${pattern}/enlighten.html" "_site/delivery/${pattern}/"
+            cp "delivery-pattern-demos/${pattern}/deck.html" "_site/delivery/${pattern}/"
+          done
+
+          # Bootstrap patterns
+          for pattern in cloud-instance-identity approle-response-wrapping tpm-sealed-bootstrap; do
+            mkdir -p "_site/bootstrap/${pattern}"
+            cp "bootstrap-pattern-demos/${pattern}/enlighten.html" "_site/bootstrap/${pattern}/"
+            cp "bootstrap-pattern-demos/${pattern}/deck.html" "_site/bootstrap/${pattern}/"
+          done
+
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

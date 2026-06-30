@@ -2,6 +2,12 @@
 
 *the Cone of Silence — a low-effort, RAM-only zone your secret never leaves. Give a legacy app its plaintext secret without ever writing it to disk.*
 
+The simplest "grep-clean disk" pattern: encrypt the secret at rest, decrypt it at runtime into a
+tmpfs file at the path the app already reads — done. No daemon, no vault dependency, minimal
+moving parts. Covers most legacy apps that read a config file and need the plaintext to connect
+to something. Doesn't protect against a co-located root-level attacker who can read the tmpfs
+mount; pair with namespace isolation or use fifo-stream if that's your threat model.
+
 ## Context — when you're here
 
 - A legacy application reads a secret from a **plaintext file** at a fixed path (e.g. `/etc/secrets.json`).

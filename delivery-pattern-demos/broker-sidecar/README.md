@@ -4,6 +4,13 @@
 through a Jinja2 template into whatever format the app reads, and watches for rotation — so
 the app never changes, and a rotated credential is delivered automatically.*
 
+The general-purpose pattern: any secret type, any output format, automatic rotation handling.
+A long-running sidecar authenticates to the vault, fetches secrets, renders them through a
+template into whatever the app expects (INI, YAML, JSON, .env), and polls for changes. When
+you have dozens of apps with dozens of formats, this is the pattern that scales — at the cost
+of a daemon to operate and a vault dependency to maintain. For a single DB credential with a
+known format, the dynamic-credential-shim is simpler.
+
 ## Context — when you're here
 
 - A legacy app reads credentials from a **config file in its own format** (INI, YAML, .env, etc.)

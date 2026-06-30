@@ -2,6 +2,12 @@
 
 *named-pipe zero-disk secret delivery — the secret streams through kernel memory and never exists on any filesystem.*
 
+The strongest spatial guarantee in the catalog: no file on any filesystem — not even a RAM-backed
+one. A writer pushes the secret into a named pipe (FIFO); the app's existing `open(path)` →
+`read()` receives it through kernel memory and the data vanishes. If the app reads its config
+once and never seeks back, this is the simplest, most auditable answer. Breaks the moment an
+app seeks, re-reads, or does mmap — for those, reach for cone-of-silence or fuse-decrypt.
+
 ## Context — when you're here
 
 - A legacy application reads a secret from a **file at a fixed path**.

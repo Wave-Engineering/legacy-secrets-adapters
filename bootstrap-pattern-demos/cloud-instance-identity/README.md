@@ -2,6 +2,12 @@
 
 *The machine already has an identity — use the cloud provider's instance metadata as the bootstrap credential, so no secret needs to be stored.*
 
+The cleanest bootstrap: no stored secret, no delivery channel, no TTL to manage. The cloud
+hypervisor already gave the instance an IAM role; vault's auth method verifies the signed
+identity document against the provider's public key — and you're in. Eliminates the bootstrap
+problem entirely on EC2/GCE/Azure. Impossible off-cloud (no metadata endpoint) and only as
+strong as your IAM policy scoping — an overly broad role is its own vulnerability.
+
 ## Context — when you're here
 
 - A materializer/shim needs to authenticate to OpenBao/Vault to fetch a secret for an unchanged app.

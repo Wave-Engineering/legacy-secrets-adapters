@@ -1,0 +1,173 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bg-nav: #010409;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #8b949e;
+  --accent: #7ee787;
+  --accent-dim: #238636;
+  --link: #58a6ff;
+  --toggle-bg: #161b22;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "nav header"
+    "nav content";
+}
+
+/* ─── Header ─── */
+.header {
+  grid-area: header;
+  background: var(--bg-nav);
+  border-bottom: 1px solid var(--border);
+  padding: .8rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.header h1 span {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: .9rem;
+  margin-left: .5rem;
+}
+
+/* ─── Toggle ─── */
+.toggle {
+  display: flex;
+  background: var(--toggle-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle button {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  padding: .4rem 1rem;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+
+.toggle button.active {
+  background: var(--accent-dim);
+  color: #fff;
+}
+
+.toggle button:hover:not(.active) {
+  color: var(--text);
+}
+
+/* ─── Nav ─── */
+.nav {
+  grid-area: nav;
+  background: var(--bg-nav);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 1rem 0;
+}
+
+.nav-section {
+  padding: .5rem 1rem;
+  margin-top: .5rem;
+}
+
+.nav-section:first-child { margin-top: 0; }
+
+.nav-section h2 {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-dim);
+  margin-bottom: .4rem;
+  padding-left: .4rem;
+}
+
+.nav-section a {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+  padding: .35rem .6rem;
+  border-radius: 6px;
+  font-size: .88rem;
+  transition: background .12s;
+}
+
+.nav-section a:hover {
+  background: #161b22;
+}
+
+.nav-section a.active {
+  background: var(--accent-dim);
+  color: #fff;
+}
+
+/* ─── Content ─── */
+.content {
+  grid-area: content;
+  position: relative;
+}
+
+.content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ─── Mobile ─── */
+.nav-toggle-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: .2rem .5rem;
+}
+
+@media (max-width: 768px) {
+  body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "content";
+  }
+
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+  }
+
+  .nav.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0,0,0,.5);
+  }
+
+  .nav-toggle-btn { display: block; }
+}

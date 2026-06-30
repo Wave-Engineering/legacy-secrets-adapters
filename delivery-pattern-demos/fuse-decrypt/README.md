@@ -2,6 +2,13 @@
 
 *a transparent decrypt-on-read filesystem for legacy apps with arbitrary I/O. Ciphertext on disk; plaintext only through the FUSE mount — the app does full POSIX I/O and never knows.*
 
+The pattern of last resort — when nothing simpler works. The app seeks, writes back, re-reads,
+truncates, mmaps — the full POSIX contract. A FUSE filesystem intercepts every syscall: ciphertext
+lives on the real disk; plaintext exists only in the kernel's VFS layer, visible through the mount.
+Most complex to deploy (requires `/dev/fuse`, a kernel module, a running daemon) and any process
+that can reach the mount path reads plaintext. Reach for this only after ruling out fifo-stream
+(sequential) and cone-of-silence (read/seek but no write-back).
+
 ## Context — when you're here
 
 - A legacy application reads a secret from a **plaintext file** at a fixed path.

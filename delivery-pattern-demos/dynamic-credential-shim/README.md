@@ -2,6 +2,13 @@
 
 *A static DB password → an OpenBao-managed credential that rotates, so a leak self-expires — delivered behind the same file the unchanged app already reads.*
 
+Temporal protection: instead of guarding a static credential that's valid forever, mint
+short-lived ones that self-destruct. OpenBao's database secrets engine issues and rotates the
+credential; the shim writes it where the app reads. A stolen backup, a leaked log, or a
+compromised disk gets a credential that's already dead by the time the attacker tries it.
+Only works when the credential is *mintable* (you control issuance) — opaque third-party API
+keys can't use this pattern.
+
 ## Context — when you're here
 
 - A legacy app reads a **static** database password from a file and won't be re-released.
