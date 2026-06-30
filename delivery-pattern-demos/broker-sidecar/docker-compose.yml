@@ -1,0 +1,30 @@
+# -------------------------------------------------------------------
+# OpenBao dev server for the Broker Sidecar demo.
+#
+# What this does:
+#   - Runs a SINGLE OpenBao container in dev mode (in-memory storage,
+#     auto-unsealed, no TLS — never do this in production).
+#   - The root token "dev-only-root-token" is the demo's BOOTSTRAP
+#     SECRET. In production the broker would authenticate via AppRole,
+#     Kubernetes auth, or instance identity — not a static token.
+#   - Host port 58201 (non-default) avoids collisions with other demos
+#     or a local OpenBao.
+#
+# Why dev mode:
+#   - No manual unseal ceremony (would obscure the broker lesson).
+#   - In-memory backend means `docker compose down -v` is a full reset.
+#   - The demo seeds a KV v2 secret at startup (see demonstrate.py
+#     bring_up) that the broker then fetches and templates.
+# -------------------------------------------------------------------
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=dev-only-root-token   # bootstrap secret (obvious dev value)
+      - -dev-listen-address=0.0.0.0:8200         # listen on all interfaces inside the container
+    cap_add:
+      - IPC_LOCK                                 # prevent swapping secrets to disk (mlock)
+    ports:
+      - "58201:8200"                             # host:container — access via localhost:58201

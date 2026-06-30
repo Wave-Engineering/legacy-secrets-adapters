@@ -1,0 +1,30 @@
+# -------------------------------------------------------------------
+# OpenBao dev server for the Cloud Instance Identity bootstrap demo.
+#
+# What this does:
+#   - Runs a SINGLE OpenBao container in dev mode (in-memory storage,
+#     auto-unsealed, no TLS — never do this in production).
+#   - The dev root token "dev-only-root-token" is used ONLY for initial
+#     setup (writing a KV secret + policy). The whole POINT of this
+#     pattern is that the materializer does NOT use a stored token —
+#     it authenticates via cloud instance identity (AWS auth method).
+#   - Host port 58200 (non-default) avoids collisions with a local OpenBao.
+#
+# Why dev mode:
+#   - No manual unseal ceremony (would obscure the instance-identity lesson).
+#   - In-memory backend means `docker compose down -v` is a full reset.
+#   - The demo configures a KV secret and a read policy on top of this
+#     bare server at runtime (see demonstrate.py bring_up).
+# -------------------------------------------------------------------
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=dev-only-root-token   # setup-only — materializer never uses this
+      - -dev-listen-address=0.0.0.0:8200         # listen on all interfaces inside the container
+    cap_add:
+      - IPC_LOCK                                 # prevent swapping secrets to disk (mlock)
+    ports:
+      - "58200:8200"                             # host:container — access via localhost:58200

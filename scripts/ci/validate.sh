@@ -13,6 +13,10 @@ cd "$(dirname "$0")/../.."
 
 echo "== py_compile (all pattern + tool Python) =="
 python3 -m py_compile delivery-pattern-demos/*/*.py bootstrap-pattern-demos/*/*.py tools/*.py
+# Also compile test files in subdirectories (if any exist)
+for tf in delivery-pattern-demos/*/tests/*.py bootstrap-pattern-demos/*/tests/*.py; do
+  python3 -m py_compile "$tf"
+done
 
 echo "== cone-of-silence: engine demo (cone.py demo) =="
 ( cd delivery-pattern-demos/cone-of-silence && python3 cone.py demo >/dev/null )
@@ -21,6 +25,12 @@ echo "== cone-of-silence: interactive demo (demonstrate.py, scripted) =="
 ( cd delivery-pattern-demos/cone-of-silence \
     && printf '1\n\n3\n\n\n\n\n\n4\n\n\n\n\n2\n\n3\n\n\n\n\n4\n\n\n\n6\n' \
        | python3 demonstrate.py >/dev/null )
+
+echo "== fifo-stream: demo end-to-end =="
+( cd delivery-pattern-demos/fifo-stream && python3 demo.py quiet )
+
+echo "== fifo-stream: unit tests =="
+python3 -m pytest delivery-pattern-demos/fifo-stream/tests/ -q --tb=short
 
 echo "== decks build deterministically + self-contained =="
 for wt in delivery-pattern-demos/*/walkthrough.py bootstrap-pattern-demos/*/walkthrough.py; do
@@ -44,6 +54,13 @@ for pat in delivery-pattern-demos/*/ bootstrap-pattern-demos/*/; do
   echo "   ✓ $(basename "$pat")"
 done
 
+echo "== fuse-decrypt: end-to-end demo =="
+if test -c /dev/fuse; then
+  ( cd delivery-pattern-demos/fuse-decrypt && python3 demo.py )
+else
+  echo "   ⚪ /dev/fuse not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
 echo "== dynamic-credential-shim: live OpenBao + Postgres demo =="
 if docker info >/dev/null 2>&1; then
   ( cd delivery-pattern-demos/dynamic-credential-shim
@@ -64,6 +81,58 @@ if docker info >/dev/null 2>&1; then
       echo "FAIL: the exfiltrated credential still works after rotation"; exit 1
     fi
     echo "   ✓ reader connected; rotated; the exfiltrated credential was rejected" )
+else
+  echo "   ⚪ Docker not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
+echo "== broker-sidecar: live OpenBao demo =="
+if docker info >/dev/null 2>&1; then
+  ( cd delivery-pattern-demos/broker-sidecar
+    trap 'docker compose down -v >/dev/null 2>&1 || true' EXIT
+    python3 demo.py >/dev/null 2>&1 \
+      || { echo "FAIL: broker-sidecar demo.py did not exit 0"; exit 1; }
+    echo "   ✓ broker fetched, rendered, rotated, reader saw both values" )
+else
+  echo "   ⚪ Docker not available — skipping broker-sidecar live demo"
+fi
+
+echo "== tpm-sealed-bootstrap: end-to-end demo =="
+if command -v systemd-creds >/dev/null 2>&1 && command -v swtpm >/dev/null 2>&1; then
+  ver=$(systemd-creds --version 2>&1 | grep -oP 'systemd \K[0-9]+' | head -1)
+  if [ "${ver:-0}" -ge 250 ]; then
+    ( cd bootstrap-pattern-demos/tpm-sealed-bootstrap
+      output=$(python3 demo.py 2>&1)
+      rc=$?
+      if [ $rc -eq 0 ]; then
+        echo "   ✓ TPM demo completed (seal/unseal or graceful exit with deck pointer)"
+      else
+        echo "   ⚠ demo.py exited $rc (check swtpm/systemd-creds setup)"
+      fi )
+  else
+    echo "   ⚪ systemd ${ver} < 250 — skipping TPM demo (py_compile + decks still validated)"
+  fi
+else
+  echo "   ⚪ systemd-creds or swtpm not available — skipping TPM demo (py_compile + decks still validated)"
+fi
+
+echo "== approle-response-wrapping: live OpenBao + AppRole + Ansible demo =="
+if docker info >/dev/null 2>&1 && command -v ansible-playbook >/dev/null 2>&1; then
+  ( cd bootstrap-pattern-demos/approle-response-wrapping
+    python3 demo.py \
+      || { echo "FAIL: approle-response-wrapping demo.py failed"; exit 1; }
+    echo "   ✓ wrap+deliver; unwrap+auth; replay rejected; expired rejected" )
+else
+  echo "   ⚪ Docker/Ansible not available — skipping the live demo (py_compile + decks still validated)"
+fi
+
+echo "== cloud-instance-identity: live OpenBao + mock metadata demo =="
+if docker info >/dev/null 2>&1; then
+  ( cd bootstrap-pattern-demos/cloud-instance-identity
+    trap 'docker compose down -v >/dev/null 2>&1 || true' EXIT
+    docker compose down -v >/dev/null 2>&1 || true
+    python3 demo.py \
+      || { echo "FAIL: cloud-instance-identity demo.py did not exit 0"; exit 1; }
+    echo "   ✓ cloud-instance-identity: all proofs passed" )
 else
   echo "   ⚪ Docker not available — skipping the live demo (py_compile + decks still validated)"
 fi

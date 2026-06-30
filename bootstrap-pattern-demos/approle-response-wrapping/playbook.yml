@@ -1,0 +1,50 @@
+# playbook.yml — Ansible playbook: wraps a SecretID and delivers to the target.
+#
+# This is the DEPLOYER side of the bootstrap: a trusted pipeline that generates a
+# response-wrapped SecretID and places it where the materializer can consume it.
+# The wrapping token is single-use and short-lived (30s TTL).
+#
+# Usage:
+#   ansible-playbook -i inventory.yml playbook.yml
+---
+- name: Wrap and deliver AppRole SecretID
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    bao_addr: "{{ hostvars[inventory_hostname]['bao_addr'] }}"
+    bao_token: "{{ hostvars[inventory_hostname]['bao_token'] }}"
+    approle_name: "{{ hostvars[inventory_hostname]['approle_name'] }}"
+    wrap_ttl: "{{ hostvars[inventory_hostname]['wrap_ttl'] }}"
+    token_dest: "{{ hostvars[inventory_hostname]['token_dest'] }}"
+
+  tasks:
+    - name: Ensure run directory exists
+      file:
+        path: "{{ token_dest | dirname }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate response-wrapped SecretID
+      uri:
+        url: "{{ bao_addr }}/v1/auth/approle/role/{{ approle_name }}/secret-id"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ bao_token }}"
+          X-Vault-Wrap-TTL: "{{ wrap_ttl }}"
+        body_format: json
+        body: {}
+        status_code: 200
+      register: wrap_response
+
+    - name: Deliver wrapped token to target
+      copy:
+        content: "{{ wrap_response.json.wrap_info.token }}"
+        dest: "{{ token_dest }}"
+        mode: "0400"
+
+    - name: Report delivery
+      debug:
+        msg: >-
+          Wrapped SecretID delivered to {{ token_dest }}
+          (TTL={{ wrap_ttl }}, single-use, accessor={{ wrap_response.json.wrap_info.accessor }})

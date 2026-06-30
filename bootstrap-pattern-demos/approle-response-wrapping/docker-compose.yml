@@ -1,0 +1,35 @@
+# -------------------------------------------------------------------
+# OpenBao dev server for the AppRole Response-Wrapping bootstrap demo.
+#
+# What this does:
+#   - Runs a SINGLE OpenBao container in dev mode (in-memory storage,
+#     auto-unsealed, no TLS — never do this in production).
+#   - The root token "dev-only-root-token" is the BOOTSTRAP SECRET that
+#     this pattern exists to eliminate in production. Here it's obvious
+#     and intentional so the demo can configure AppRole non-interactively.
+#   - Host port 58201 (non-default) avoids collisions with other demos
+#     that also run OpenBao on different ports.
+#
+# Why dev mode:
+#   - No manual unseal ceremony (would obscure the AppRole lesson).
+#   - In-memory backend means `docker compose down -v` is a full reset.
+#   - The demo configures AppRole auth, a policy, and a KV secret on
+#     top of this bare server at runtime (see demonstrate.py bring_up).
+# -------------------------------------------------------------------
+services:
+  openbao:
+    image: openbao/openbao:2.5.0
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=dev-only-root-token   # the bootstrap secret we're replacing
+      - -dev-listen-address=0.0.0.0:8200         # listen on all interfaces inside the container
+    cap_add:
+      - IPC_LOCK                                 # prevent swapping secrets to disk (mlock)
+    ports:
+      - "58201:8200"                             # host:container — access via localhost:58201
+    healthcheck:
+      test: ["CMD", "bao", "status", "-address=http://127.0.0.1:8200"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

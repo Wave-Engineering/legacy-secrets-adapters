@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIFO Stream — a walkthrough</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3;
+         font: 18px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: flex-start;
+           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 2.5rem 2rem 5rem; overflow-y: auto; }
+  .slide.active { display: flex; }
+  .slide.cover { justify-content: center; }
+  .slide-title { margin: 0 0 .5rem; font-size: 1.5rem; color: #7ee787; font-weight: 700; }
+  .beat { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; }
+  .beat.show { opacity: 1; transform: none; }
+  .say { color: #b9c2cc; margin: .2rem 0; }
+  .prose { color: #c9d1d9; margin: .4rem 0; font-size: 1.12rem; }
+  .title { text-align: center; }
+  .title h1 { font-size: 3rem; margin: 0 0 .4rem; line-height: 1.1; }
+  .tagline { font-size: 1.35rem; color: #7ee787; margin: 0; }
+  .kicker { color: #8b949e; font-family: "SF Mono", Consolas, monospace; margin-top: 1.2rem; }
+  .term { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: .8rem 1rem;
+          font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; font-size: .92rem; margin: .3rem 0; }
+  .promptline { white-space: pre-wrap; word-break: break-all; }
+  .prompt { color: #7ee787; } .cmd { color: #e6edf3; }
+  .term pre.out { margin: .5rem 0 0; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; }
+  .verdict { font-weight: 700; margin: .4rem 0; }
+  .verdict.ok { color: #7ee787; } .verdict.fail { color: #ff7b72; }
+  a { color: #58a6ff; } code { font-family: "SF Mono", Consolas, monospace; color: #a5d6ff; }
+  .hud { position: fixed; bottom: 1rem; left: 0; right: 0; display: flex; justify-content: center;
+         gap: 1rem; align-items: center; color: #8b949e; font-size: .8rem; }
+  .hud .bar { width: 180px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; }
+  .hud .bar > i { display: block; height: 100%; background: #7ee787; transition: width .3s ease; }
+  kbd { background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 0 .35rem; }
+</style>
+</head>
+<body>
+<section class="slide cover"><div class="beat title"><h1>FIFO Stream</h1><p class="tagline">named-pipe zero-disk secret delivery</p><p class="kicker">legacy-secrets-adapters · a walkthrough</p></div></section>
+<section class="slide"><h2 class="slide-title">The problem</h2><div class="beat"><p class="prose">A legacy app reads its credentials from a file at a fixed path. Even a RAM-backed tmpfs file can be read by root or another process sharing the mount. For a read-once sequential reader, we can do better: deliver the secret through a named pipe (FIFO) so it streams through kernel memory and NEVER exists on any filesystem — not even tmpfs.</p></div></section>
+<section class="slide"><h2 class="slide-title">Create the named pipe</h2><div class="beat"><p class="say">Replace the file the reader expects with a FIFO at the same path.<br>A FIFO looks like a file but is a kernel pipe buffer — no data stored anywhere.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host fifo-stream]$ </span><span class="cmd">mkfifo /tmp/fifo-stream-demo/secrets.json</span></div><pre class="out"></pre></div></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host fifo-stream]$ </span><span class="cmd">ls -la /tmp/fifo-stream-demo/secrets.json</span></div><pre class="out">prw------- 1 you you 0 Jan  1 09:00 /tmp/fifo-stream-demo/secrets.json</pre></div></div><div class="beat"><p class="say">Note the 'p' at the start — that's a pipe, not a regular file.</p></div></section>
+<section class="slide"><h2 class="slide-title">Writer feeds, reader reads</h2><div class="beat"><p class="say">The writer pushes the secret into the pipe. The reader opens the same path<br>and receives the secret — streaming through kernel memory, never touching disk.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host fifo-stream]$ </span><span class="cmd">echo '{"passwd": "S3cr3t-Pg-Pass", ...}' &gt; /tmp/fifo-stream-demo/secrets.json &amp;</span></div><pre class="out">[1] 12345</pre></div></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host fifo-stream]$ </span><span class="cmd">CONFIG_PATH=/tmp/fifo-stream-demo/secrets.json ./legacy_reader.py</span></div><pre class="out">[legacy-reader] opened /tmp/fifo-stream-demo/secrets.json
+[legacy-reader] connecting to db.internal/appdb as app_pg_user ...
+[legacy-reader] (password used in memory to connect — never printed, never logged)</pre></div></div><div class="beat"><p class="verdict ok">The reader gets the secret — delivered through the pipe, never stored.</p></div></section>
+<section class="slide"><h2 class="slide-title">Grep the disk — nothing</h2><div class="beat"><p class="say">The secret streamed through kernel memory. There is no file to grep,<br>no data on disk, no tmpfs remnant — nothing.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host fifo-stream]$ </span><span class="cmd">grep -r 'S3cr3t-Pg-Pass' /tmp/fifo-stream-demo/ --exclude='*.py' || echo '    (nothing found)'</span></div><pre class="out">    (nothing found)</pre></div></div><div class="beat"><p class="say">A FIFO has no content — it's a rendezvous point, not a container. The secret<br>existed only in the kernel pipe buffer while data was in flight.</p></div><div class="beat"><p class="verdict ok">Zero disk footprint. Not even a tmpfs file to protect.</p></div></section>
+<section class="slide"><h2 class="slide-title">Second cat hangs (read-once)</h2><div class="beat"><p class="say">A named pipe is read-once by nature. Once the data flows through, there is<br>nothing left to read — a second reader blocks forever (until a new writer appears).</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@host fifo-stream]$ </span><span class="cmd">cat /tmp/fifo-stream-demo/secrets.json   # hangs — no writer, nothing buffered</span></div><pre class="out">^C  (interrupted after 5s — the cat hung, proving read-once)</pre></div></div><div class="beat"><p class="verdict ok">Read-once: the secret flows through once and is gone. No replay possible.</p></div></section>
+<section class="slide"><h2 class="slide-title">The takeaway</h2><div class="beat"><p class="prose">A named pipe (FIFO) delivers a secret with zero disk footprint — the data streams through kernel memory and never exists on any filesystem. The legacy app opens the same path it always did; it has no idea the 'file' is a pipe.</p></div><div class="beat"><p class="prose">Tradeoffs: read-once (the app can't re-read the file), timing coordination (the writer must feed before or concurrently with the reader), and no persistence (a restart needs a new write). Stronger than tmpfs for sequential, read-once readers.</p></div><div class="beat"><p class="prose"><strong>Bootstrap secret — out of scope.</strong> How the writer obtains the secret to feed into the pipe is an orthogonal concern (the bootstrap-secret pattern family). Why &amp; what: <code>enlighten.html</code> · <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.</p></div></section>
+<div class="hud">
+  <span id="counter">1 / 1</span>
+  <span class="bar"><i id="prog"></i></span>
+  <span><kbd>←</kbd> <kbd>→</kbd> / click to navigate</span>
+</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let si = 0;
+  const beats = s => [...s.querySelectorAll('.beat')];
+  const shownCount = s => beats(s).filter(b => b.classList.contains('show')).length;
+
+  function hud() {
+    document.getElementById('counter').textContent = (si + 1) + ' / ' + slides.length;
+    document.getElementById('prog').style.width = ((si + 1) / slides.length * 100) + '%';
+  }
+  function enter(i, revealAll) {
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    si = i;
+    const bs = beats(slides[i]);
+    bs.forEach(b => b.classList.remove('show'));
+    if (revealAll) bs.forEach(b => b.classList.add('show'));
+    else if (bs.length) bs[0].classList.add('show');
+    slides[i].scrollTop = 0;
+    hud();
+  }
+  function next() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown < bs.length) { bs[shown].classList.add('show'); bs[shown].scrollIntoView({block: 'nearest'}); }
+    else if (si < slides.length - 1) enter(si + 1, false);
+  }
+  function prev() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown > 1) { bs[shown - 1].classList.remove('show'); if (shown - 2 >= 0) bs[shown - 2].scrollIntoView({block: 'nearest'}); }
+    else if (si > 0) enter(si - 1, true);
+  }
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') enter(0, false);
+    else if (e.key === 'End') enter(slides.length - 1, true);
+  });
+  addEventListener('click', e => { if (!e.target.closest('a')) next(); });
+  enter(0, false);
+</script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FUSE Decrypt — a legacy-secrets adapter pattern</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code, .mono { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; color:#58a6ff; text-decoration:none; }
+  a { color: #58a6ff; }
+
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.88rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.bad  { border-color:#f85149; background:#2b1718; color:#ffa198; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.dim  { color:#8b949e; }
+  .box.fuse { border-color:#d2a8ff; background:#1a1225; color:#d2a8ff; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1rem 0; }
+  @media (max-width:680px){ .grid{ grid-template-columns:1fr; } }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 1rem 1.2rem; }
+  .card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+  .card.pro { border-color: #2ea04355; } .card.con { border-color: #f8514955; }
+  .pro h3 { color: #7ee787; } .con h3 { color: #ff7b72; }
+
+  .spectrum { display:flex; align-items:center; gap:.5rem; margin:1.2rem 0; padding:1rem;
+              background:#0f141b; border:1px solid #30363d; border-radius:10px; }
+  .spectrum .bar { flex:1; height:8px; background: linear-gradient(to right, #3fb950, #d2a8ff, #f85149);
+                   border-radius:4px; position:relative; }
+  .spectrum .marker { position:absolute; top:-6px; width:3px; height:20px; background:#e6edf3; border-radius:2px; }
+  .spectrum .label { font-size:.75rem; color:#8b949e; white-space:nowrap; }
+
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FUSE Decrypt</h1>
+  <p class="sub">a transparent decrypt-on-read filesystem for legacy apps with arbitrary I/O</p>
+
+  <p class="lead">Ciphertext on disk. A FUSE layer decrypts on read and encrypts on write &mdash;
+     transparently. The legacy app does full POSIX I/O (seek, write, mmap) and never knows
+     its file is actually encrypted at rest.</p>
+
+  <nav>
+    <a href="#problem">The problem</a>
+    <a href="#idea">The idea</a>
+    <a href="#spectrum">Power spectrum</a>
+    <a href="#tradeoffs">Tradeoffs</a>
+    <a href="#honest">When NOT to use</a>
+    <a href="#hardening">Production</a>
+    <a href="#related">Related</a>
+    <a href="deck.html">the walkthrough (how)</a>
+  </nav>
+
+  <h2 id="problem">The problem</h2>
+  <p>A legacy app reads its credentials from a <strong>plaintext file</strong> and won't be
+     re-released. But unlike a simple sequential reader, this app does <em>arbitrary</em>
+     file I/O: it seeks to specific offsets, writes fields back, re-reads, and expects
+     standard POSIX filesystem semantics. A named pipe (FIFO) can't handle seeks. A tmpfs
+     Cone works but still puts plaintext in RAM as a real file. We want:</p>
+  <ul>
+    <li>Zero plaintext on disk &mdash; ever</li>
+    <li>Full POSIX I/O support (seek, write, re-read)</li>
+    <li>Transparent to the app &mdash; no changes</li>
+    <li>Encryption key never touches persistent storage</li>
+  </ul>
+
+  <h2 id="idea">The idea, side by side</h2>
+  <div class="diagrams">
+    <figure class="panel">
+      <figcaption>Before: plaintext on disk</figcaption>
+      <div class="flow">
+        <div class="box bad">/etc/app/secrets.json<small>plaintext on disk</small></div>
+        <div class="arrow">&uarr; open() + read()</div>
+        <div class="box">Legacy App<small>seeks, writes, re-reads</small></div>
+      </div>
+    </figure>
+    <figure class="panel">
+      <figcaption>After: FUSE decrypt layer</figcaption>
+      <div class="flow">
+        <div class="box good">cipherstore/secrets.json<small>ciphertext (AES-256-GCM)</small></div>
+        <div class="arrow">&uarr; decrypt on read / encrypt on write</div>
+        <div class="box fuse">FUSE Daemon<small>key in memory only</small></div>
+        <div class="arrow">&uarr; standard POSIX ops</div>
+        <div class="box">/mnt/app/secrets.json<small>mount point (plaintext view)</small></div>
+        <div class="arrow">&uarr; open() + seek() + write() + read()</div>
+        <div class="box">Legacy App<small>unchanged &mdash; sees a normal file</small></div>
+      </div>
+    </figure>
+  </div>
+
+  <h2 id="spectrum">Power spectrum positioning</h2>
+  <p>The catalog's delivery patterns form a complexity/capability spectrum:</p>
+
+  <div class="spectrum">
+    <span class="label">simple</span>
+    <div class="bar">
+      <span class="marker" style="left:15%" title="fifo-stream"></span>
+      <span class="marker" style="left:40%" title="cone-of-silence"></span>
+      <span class="marker" style="left:80%" title="fuse-decrypt"></span>
+    </div>
+    <span class="label">complex</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>fifo-stream</h3>
+      <p style="font-size:.9rem; color:#c9d1d9;">Named pipe. Zero disk. But: read-once, sequential only.
+         Breaks on seek or re-read.</p>
+    </div>
+    <div class="card">
+      <h3>cone-of-silence</h3>
+      <p style="font-size:.9rem; color:#c9d1d9;">tmpfs (RAM file). Supports seeks and re-reads.
+         But: plaintext exists as a file in RAM. Gone on unmount.</p>
+    </div>
+    <div class="card">
+      <h3 style="color:#d2a8ff;">fuse-decrypt (this pattern)</h3>
+      <p style="font-size:.9rem; color:#c9d1d9;">Full FUSE filesystem. Supports seek, write-back,
+         arbitrary I/O. Plaintext never stored &mdash; decrypted on-the-fly per syscall.
+         Most complex, most capable.</p>
+    </div>
+  </div>
+
+  <h2 id="tradeoffs">Tradeoffs</h2>
+  <div class="grid">
+    <div class="card pro">
+      <h3>Strengths</h3>
+      <ul style="font-size:.9rem; padding-left:1.2rem; color:#c9d1d9;">
+        <li>Full POSIX: seek, write, re-read, truncate</li>
+        <li>Zero plaintext on disk &mdash; ever</li>
+        <li>Transparent: app unchanged</li>
+        <li>Key in daemon memory only</li>
+        <li>Works with any file format</li>
+      </ul>
+    </div>
+    <div class="card con">
+      <h3>Residual exposure</h3>
+      <ul style="font-size:.9rem; padding-left:1.2rem; color:#c9d1d9;">
+        <li><strong>Complexity:</strong> a userspace filesystem daemon is a non-trivial moving part</li>
+        <li><strong>Performance:</strong> every I/O op crosses the kernel/userspace boundary twice (FUSE overhead)</li>
+        <li><strong>Key in memory:</strong> the daemon process holds the key; <code>ptrace</code> / <code>/proc/pid/mem</code> can read it</li>
+        <li><strong>Availability:</strong> if the daemon crashes, the mount disappears &mdash; app I/O fails</li>
+        <li><strong>Environment-sensitive:</strong> requires <code>/dev/fuse</code>, kernel FUSE module, <code>libfuse3</code> &mdash; not available in all containers/VMs</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 id="honest">Honest positioning: when NOT to use this</h2>
+  <div class="card con" style="margin:1rem 0;">
+    <h3>The LUKS question</h3>
+    <p style="font-size:.9rem; color:#c9d1d9;">If the host already has full-disk encryption
+       (LUKS, dm-crypt, BitLocker), FUSE-decrypt gives you <strong>the same security boundary
+       at worse performance</strong>. Both protect against stolen media. Neither protects against
+       a process that can read the plaintext view. FUSE-decrypt is a slower, narrower, userspace
+       reimplementation of the same property &mdash; unless you need per-file key granularity or
+       are in an environment without block-device access.</p>
+  </div>
+  <div class="card con" style="margin:1rem 0;">
+    <h3>The co-located process problem</h3>
+    <p style="font-size:.9rem; color:#c9d1d9;">A transparent filesystem <em>sounds</em> like total
+       coverage. In reality it is the <strong>thinnest</strong> protection in this catalog: any
+       process on the box with mount-point access reads plaintext. Compare:</p>
+    <ul style="font-size:.9rem; padding-left:1.2rem; color:#c9d1d9;">
+      <li><strong>fifo-stream</strong> &mdash; secret never hits disk at all (strictly stronger)</li>
+      <li><strong>broker-sidecar</strong> &mdash; credential rotates, so a leak has a shelf life</li>
+      <li><strong>dynamic-credential-shim</strong> &mdash; credential is ephemeral by design</li>
+      <li><strong>cone-of-silence</strong> &mdash; prevents exfiltration even from a compromised process</li>
+    </ul>
+    <p style="font-size:.9rem; color:#c9d1d9;">FUSE-decrypt only wins against &ldquo;stolen disk&rdquo;
+       &mdash; and LUKS already covers that for most deployments.</p>
+  </div>
+  <div class="card pro" style="margin:1rem 0;">
+    <h3>When it genuinely earns its place</h3>
+    <ul style="font-size:.9rem; padding-left:1.2rem; color:#c9d1d9;">
+      <li>Per-file key separation (different secrets, different keys, different access policies)</li>
+      <li>Rootless containers / shared hosting / PaaS without block-device access (no LUKS available)</li>
+      <li>Audit logging per-file-access at the FUSE layer (who opened what, when)</li>
+      <li>The app requires full POSIX I/O (seek/write/re-read) AND fifo-stream won&rsquo;t work</li>
+    </ul>
+  </div>
+
+  <h2 id="hardening">Production hardening</h2>
+  <ul>
+    <li><strong>systemd integration:</strong> run as a <code>Type=notify</code> service with
+        <code>Restart=always</code>; bind-mount the FUSE view into the app's mount namespace</li>
+    <li><strong>Key source:</strong> OpenBao Transit (decrypt-only policy) or TPM-sealed;
+        the key never touches persistent storage</li>
+    <li><strong>Crash resilience:</strong> systemd auto-restarts the daemon; the app sees a brief
+        I/O error then reconnects (or use a socket-activation pattern)</li>
+    <li><strong>Minimal surface:</strong> the daemon runs as a dedicated user, <code>no_new_privs</code>,
+        <code>ProtectSystem=strict</code>, only the cipherstore directory readable</li>
+    <li><strong>mmap:</strong> pyfuse3 does not natively support <code>mmap</code>; apps that
+        <code>mmap</code> the config file need a kernel-mode solution (dm-crypt, fscrypt) instead</li>
+  </ul>
+
+  <h2 id="related">Related patterns</h2>
+  <ul>
+    <li><strong>cone-of-silence</strong> &mdash; simpler (tmpfs), covers sequential + seek readers,
+        but the plaintext exists as a RAM file</li>
+    <li><strong>fifo-stream</strong> &mdash; simplest (named pipe), zero-disk, but read-once sequential only</li>
+    <li><strong>dynamic-credential-shim</strong> &mdash; rotating credentials behind the same file
+        (orthogonal: can combine with fuse-decrypt)</li>
+    <li><strong>tpm-sealed-bootstrap</strong> &mdash; how the FUSE daemon obtains its key without
+        a stored secret (the bootstrap problem)</li>
+  </ul>
+
+  <div class="foot">
+    <p><strong>Bootstrap secret &mdash; out of scope.</strong> This demo uses a keyfile (<code>demo.key</code>)
+       for the AES-256 key. How the daemon would really authenticate to its key source (TPM seal, OpenBao
+       AppRole, Kubernetes service-account) is an orthogonal concern addressed by the bootstrap-secret
+       pattern family.</p>
+    <p><a href="deck.html">the walkthrough</a> &middot;
+       <a href="../../docs/decision-guide.md">decision guide</a> &middot;
+       <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a></p>
+  </div>
+  <p class="foot">Can't run the demo locally? Try our <a href="deck.html">walkthrough</a>.</p>
+</main>
+</body>
+</html>

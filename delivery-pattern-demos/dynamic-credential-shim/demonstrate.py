@@ -27,7 +27,7 @@ os.environ["BAO_ADDR"] = "http://127.0.0.1:58200"
 os.environ["BAO_TOKEN"] = "dev-only-root-token"   # BOOTSTRAP SECRET (obvious dev value)
 
 ROLE = "app-static"
-WRITEUP = HERE / "deck.html"
+WRITEUP = HERE / "enlighten.html"
 RUN_CFG = HERE / "run" / "secrets.json"
 
 # --- pretty (same visual grammar as cone-of-silence) ------------------------
@@ -100,7 +100,32 @@ done = {"up": False, "read": False, "rotate": False}
 def _stack_up() -> bool:
     r = subprocess.run(["docker", "compose", "ps", "--status=running", "-q"],
                        cwd=HERE, capture_output=True, text=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    import urllib.request, urllib.error
+    try:
+        req = urllib.request.Request(f"{os.environ['BAO_ADDR']}/v1/sys/health")
+        with urllib.request.urlopen(req, timeout=2):
+            return True
+    except (urllib.error.URLError, OSError):
+        return False
+
+def _wait_stack(timeout=30) -> bool:
+    if _stack_up():
+        return True
+    r = subprocess.run(["docker", "compose", "ps", "-q"],
+                       cwd=HERE, capture_output=True, text=True)
+    if not r.stdout.strip():
+        return False
+    print(DIM("    waiting for stack to be ready ..."), end="", flush=True)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _stack_up():
+            print(GREEN(" ready"))
+            return True
+        time.sleep(0.5)
+    print(RED(" timed out"))
+    return False
 
 def _all_done() -> bool:
     return done["read"] and done["rotate"]
@@ -111,12 +136,14 @@ def bring_up():
           "engine and a STATIC role — OpenBao now owns and rotates app_pg_user's password.")
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE,
                    capture_output=True)  # fresh stack each time (setup's rotate-root isn't idempotent)
+    coach("First, let's see what we're about to run:")
+    shell("cat docker-compose.yml")
     shell("docker compose up -d")
     shell("./setup.sh")
     done["up"] = True
 
 def read_secret():
-    if not _stack_up():
+    if not _wait_stack():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
     coach("The shim fetches the OpenBao-managed credential and writes the reader's file.\n"
           "The unchanged legacy reader then connects — unaware the password is managed:")
@@ -126,7 +153,7 @@ def read_secret():
     done["read"] = True
 
 def rotate_and_leak():
-    if not _stack_up():
+    if not _wait_stack():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
     coach("Suppose an attacker exfiltrates a copy of the current password ...")
     cur = subprocess.run(["bao", "read", "-format=json", f"database/static-creds/{ROLE}"],
@@ -151,6 +178,28 @@ def rotate_and_leak():
     shell("./shim.py")
     shell("./legacy_reader.py")
     done["rotate"] = True
+
+def grep_disk():
+    if not RUN_CFG.exists():
+        print(DIM("    (no rendered file yet — choose 2 first)")); return
+    coach("The shim wrote the credential to a regular file. Can we find it on disk?")
+    print(DIM(f"    grep 'password' {RUN_CFG.relative_to(HERE)}"))
+    content = RUN_CFG.read_text()
+    for line in content.splitlines():
+        if "password" in line.lower():
+            print(RED(f"    {line.strip()}"))
+        else:
+            print(DIM(f"    {line.strip()}"))
+    verdict(
+        "The credential is plaintext on disk RIGHT NOW.\n"
+        "    The shim's protection is temporal, not spatial: this password\n"
+        "    will be dead after the next rotation window. A stolen copy\n"
+        "    has a shelf life — but it IS readable until then.", ok=False)
+    coach("Defence in Depth: couple with cone-of-silence (write to a tmpfs\n"
+          "RAM path instead of a regular file) for temporal + spatial protection.\n"
+          "Rotation kills leaked copies; the Cone ensures there's nothing to leak\n"
+          "from disk in the first place.")
+
 
 def explore():
     sh = os.environ.get("SHELL", "/bin/bash")
@@ -184,19 +233,20 @@ def menu():
     print("\n" + BOLD("════ The Dynamic Credential Shim — an experience ════"))
     print(f"     Stack: {up}     Experienced:  [{r}] managed-read   [{rot}] rotation")
     print()
-    print("  0) Enlighten me                  " + DIM("(open the slide deck)"))
+    print("  0) Enlighten me                  " + DIM("(open the concept page)"))
     print("  1) Bring up OpenBao + Postgres   " + DIM("(docker compose up + configure the static role)"))
     print("  2) Read the secret               " + DIM("(shim fetches → unchanged reader connects)"))
     print("  3) Rotate & watch the leak die   " + DIM("(exfiltrate → rotate → old credential fails)"))
-    print("  4) Explore                       " + DIM("(fork a shell; type 'exit' to return)"))
-    print("  5) Tear down                     " + DIM("(docker compose down -v)"))
-    print("  " + (GREEN("6) Finish") if _all_done() else "6) Abort"))
+    print("  4) Grep the disk                 " + DIM("(find the secret on disk — the honest tradeoff)"))
+    print("  5) Explore                       " + DIM("(fork a shell; type 'exit' to return)"))
+    print("  6) Tear down                     " + DIM("(docker compose down -v)"))
+    print("  " + (GREEN("7) Finish") if _all_done() else "7) Abort"))
 
 def main():
     os.chdir(HERE)
     shutil.rmtree(HERE / "__pycache__", ignore_errors=True)
     actions = {"0": enlighten, "1": bring_up, "2": read_secret,
-               "3": rotate_and_leak, "4": explore, "5": tear_down}
+               "3": rotate_and_leak, "4": grep_disk, "5": explore, "6": tear_down}
     while True:
         clear_screen()
         menu()
@@ -205,7 +255,7 @@ def main():
             choice = input().strip()
         except EOFError:
             break
-        if choice == "6":
+        if choice == "7":
             print(GREEN("\n  Finished — a leaked credential now has a shelf life. \U0001f44b")
                   if _all_done() else DIM("\n  Aborted."))
             break
@@ -214,6 +264,9 @@ def main():
             continue
         action()
         pause()
+
+    if _stack_up():
+        tear_down()
 
 if __name__ == "__main__":
     main()

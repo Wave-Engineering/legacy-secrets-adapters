@@ -1,0 +1,47 @@
+name: Validate catalog
+
+on:
+  push:
+    branches: [main, "kahuna/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libfuse3-dev \
+            fuse3 \
+            swtpm \
+            postgresql-client
+
+      - name: Install OpenBao CLI
+        run: |
+          curl -fsSL https://github.com/openbao/openbao/releases/download/v2.1.0/bao_2.1.0_linux_amd64.deb -o /tmp/bao.deb
+          sudo dpkg -i /tmp/bao.deb
+
+      - name: Install Python dependencies
+        run: |
+          pip install --quiet \
+            enlighten \
+            hvac \
+            jinja2 \
+            cryptography \
+            pyfuse3 \
+            pytest \
+            requests \
+            ansible-core
+
+      - name: Run validate.sh
+        run: ./scripts/ci/validate.sh

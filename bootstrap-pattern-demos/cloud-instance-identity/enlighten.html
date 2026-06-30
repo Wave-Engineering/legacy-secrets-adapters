@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Instance Identity &mdash; why &amp; what</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d1117; color: #e6edf3;
+         font: 17px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.12; margin: 0 0 .25rem; }
+  h2 { margin: 2.8rem 0 .6rem; font-size: 1.35rem; color: #7ee787; }
+  h2 + p { margin-top: .3rem; }
+  .sub { color: #8b949e; font-size: 1.05rem; margin: 0 0 1.5rem; }
+  .lead { font-size: 1.28rem; border-left: 3px solid #7ee787; padding-left: 1rem; color: #c9d1d9; }
+  code { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; color: #a5d6ff; }
+  a { color: #58a6ff; }
+  nav { margin: 1.5rem 0 0; }
+  nav a { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:999px;
+          padding:.2rem .8rem; font-size:.85rem; margin:.2rem .3rem .2rem 0; text-decoration:none; }
+
+  .diagrams { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1rem 0; }
+  @media (max-width:680px){ .diagrams{ grid-template-columns:1fr; } }
+  .panel { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem .8rem; margin:0; }
+  .panel figcaption { font-weight:600; color:#c9d1d9; margin-bottom:.9rem; text-align:center; }
+  .flow { display:flex; flex-direction:column; align-items:center; gap:.05rem; }
+  .box { width:100%; max-width:290px; text-align:center; background:#161b22; border:1px solid #30363d;
+         border-radius:8px; padding:.55rem .6rem; font-family:"SF Mono",Consolas,monospace; font-size:.88rem; }
+  .box small { display:block; font-family:inherit; color:#8b949e; font-size:.72rem; margin-top:.15rem; }
+  .box.bad  { border-color:#f85149; background:#2b1718; color:#ffa198; }
+  .box.good { border-color:#3fb950; background:#0f2618; color:#7ee787; }
+  .box.dim  { color:#8b949e; }
+  .arrow { color:#8b949e; padding:.2rem 0; text-align:center; line-height:1.1; }
+  .arrow span { display:block; font-size:.72rem; }
+  .note { color:#8b949e; font-size:.9rem; margin:.8rem .2rem 0; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1rem 0; }
+  @media (max-width:680px){ .grid{ grid-template-columns:1fr; } }
+  .miti { background:#0f141b; border:1px solid #30363d; border-left:3px solid #d2a8ff;
+          border-radius:8px; padding:.85rem 1.1rem; margin:.9rem 0; }
+  .miti h3 { margin:0 0 .3rem; color:#d2a8ff; font-size:1.05rem; }
+  .card { background:#0f141b; border:1px solid #30363d; border-radius:10px; padding:1rem; margin:.6rem 0; }
+  .card h3 { margin:0 0 .4rem; color:#e6edf3; font-size:1rem; }
+  .card p { margin:0; color:#8b949e; font-size:.92rem; }
+  .foot { margin-top:3rem; color:#8b949e; font-size:.95rem; border-top:1px solid #21262d; padding-top:1.5rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cloud Instance Identity</h1>
+  <p class="sub">the machine already has an identity &mdash; use it as the bootstrap credential</p>
+
+  <p class="lead">Every secret-delivery pattern needs a <em>bootstrap credential</em> to authenticate
+     to its key source. On a cloud instance, that credential already exists: the provider assigned an
+     IAM role at launch. No stored secret &mdash; the machine's identity IS the credential.</p>
+
+  <p class="note"><strong>Note:</strong> This demo uses a mock that simulates the hypervisor-backed
+     metadata service. In production, the real IMDS is provided by the EC2 hypervisor and is
+     unreachable from outside the instance (link-local 169.254.169.254).</p>
+
+  <nav>
+    <a href="#problem">The problem</a>
+    <a href="#idea">No stored secret</a>
+    <a href="#imdsv2">IMDSv2 flow</a>
+    <a href="#tradeoffs">Tradeoffs</a>
+    <a href="#related">Related</a>
+    <a href="deck.html">the walk-through (how)</a>
+  </nav>
+
+  <h2 id="problem">The problem</h2>
+  <p>Every delivery pattern (Cone of Silence, Dynamic Credential Shim, broker-sidecar) bottoms out
+     at the same question: <strong>how does the materializer authenticate to its key source without
+     a stored secret?</strong> If you store the bootstrap credential in a file, you have just moved
+     the problem one level down. The turtles-to-silicon regress has to end at a root of trust the
+     file-thief cannot reach.</p>
+
+  <h2 id="idea">The idea: no stored secret</h2>
+  <div class="diagrams">
+    <figure class="panel">
+      <figcaption>Stored bootstrap secret</figcaption>
+      <div class="flow">
+        <div class="box bad">bootstrap-token.json<small>on disk, stealable</small></div>
+        <div class="arrow">&darr;<span>read</span></div>
+        <div class="box">materializer</div>
+        <div class="arrow">&darr;<span>authenticate</span></div>
+        <div class="box">OpenBao / Vault</div>
+      </div>
+      <p class="note">If an attacker reads the disk, they have the bootstrap credential.
+         You moved the problem but did not solve it.</p>
+    </figure>
+
+    <figure class="panel">
+      <figcaption>Cloud instance identity</figcaption>
+      <div class="flow">
+        <div class="box good">hypervisor metadata<small>169.254.169.254 (link-local)</small></div>
+        <div class="arrow">&darr;<span>IMDSv2 (PUT + GET)</span></div>
+        <div class="box">materializer</div>
+        <div class="arrow">&darr;<span>AWS auth method</span></div>
+        <div class="box">OpenBao / Vault</div>
+      </div>
+      <p class="note">Nothing on disk. The identity is the instance itself &mdash; assigned by
+         the cloud control plane, verified via STS.</p>
+    </figure>
+  </div>
+
+  <p>The cloud provider's control plane is the root of trust. It assigned the instance an IAM role
+     at launch; the metadata endpoint hands out short-lived tokens that prove &ldquo;I am this
+     instance.&rdquo; OpenBao's AWS auth method verifies the claim via STS &mdash; no shared secret,
+     no file to steal.</p>
+
+  <h2 id="imdsv2">How it works: IMDSv2</h2>
+  <pre style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1rem;overflow-x:auto;font-size:.9rem">
+  EC2 Instance                           169.254.169.254 (hypervisor)
+       |                                        |
+       |--- PUT /latest/api/token ------------->|   (TTL header required)
+       |<-- 200: session-token -----------------|
+       |                                        |
+       |--- GET /meta-data/iam/...  ----------->|   (X-aws-ec2-metadata-token header)
+       |<-- 200: {AccessKeyId, Secret, Token} --|
+       |                                        |
+  EC2 Instance                           OpenBao / Vault
+       |                                        |
+       |--- POST /v1/auth/aws/login ----------->|   (signed STS GetCallerIdentity)
+       |<-- 200: {client_token, policies} ------|
+       |                                        |
+       |--- GET /v1/secret/data/... ----------->|   (X-Vault-Token header)
+       |<-- 200: {password: ...} ---------------|</pre>
+  <p>The step-by-step walk-through is in <a href="deck.html"><code>deck.html</code></a>.</p>
+
+  <h2 id="tradeoffs">Tradeoffs &mdash; be honest</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Cloud-only</h3>
+      <p>This pattern requires a cloud provider with an instance metadata service and a
+         corresponding Vault/OpenBao auth method. It does not work on bare-metal, on-prem,
+         or in environments without a hypervisor-backed identity.</p>
+    </div>
+    <div class="card">
+      <h3>Trusts the provider</h3>
+      <p>You are trusting the cloud provider's control plane as your root of trust. If the
+         provider is compromised (or coerced), your bootstrap credential is compromised.
+         This is the same trust you already place in the provider for compute, network, and storage.</p>
+    </div>
+    <div class="card">
+      <h3>Metadata service exposure</h3>
+      <p>IMDSv1 was vulnerable to SSRF: any process that could make HTTP requests from the instance
+         could reach 169.254.169.254. IMDSv2 mitigates this (PUT requires a hop-limit header that
+         containers/proxies cannot relay), but misconfiguration can still expose it. Enforce IMDSv2-only
+         and restrict the IAM role's permissions to minimum.</p>
+    </div>
+  </div>
+  <div class="miti"><h3>What this does NOT protect against</h3>
+    <p>An attacker with root on the instance can still call the metadata endpoint. This pattern
+       anchors trust to the <em>machine</em>, not to a specific process. For process-level isolation,
+       layer container-credential-isolation (EKS IRSA, ECS task roles) on top.</p></div>
+
+  <h2 id="related">Related patterns</h2>
+  <ul>
+    <li><strong>tpm-sealed-bootstrap</strong> (planned) &mdash; anchors trust to the machine's TPM
+        (silicon). Different root of trust: cloud control plane vs. physical hardware. Use TPM for
+        on-prem/bare-metal; use cloud identity when you have a provider.</li>
+    <li><strong>GCP metadata + GCE auth</strong> &mdash; same idea, different provider. GCP instances
+        get a service-account identity via <code>metadata.google.internal</code>.</li>
+    <li><strong>Azure IMDS + managed identity</strong> &mdash; same idea. Azure instances call
+        <code>169.254.169.254/metadata/identity/oauth2/token</code>.</li>
+    <li><strong><a href="../../delivery-pattern-demos/dynamic-credential-shim/enlighten.html">Dynamic Credential Shim</a></strong>
+        &mdash; a delivery pattern that can USE this bootstrap to authenticate to OpenBao.</li>
+    <li><strong><a href="../../delivery-pattern-demos/cone-of-silence/enlighten.html">Cone of Silence</a></strong>
+        &mdash; keeps the delivered secret RAM-only (orthogonal to how you bootstrap).</li>
+  </ul>
+
+  <h2>Delivery pattern &mdash; out of scope</h2>
+  <p>This demo anchors the bootstrap credential (cloud instance identity); what <em>consumes</em>
+     the anchored credential &mdash; a delivery pattern that materializes the secret to an unchanged
+     app &mdash; is the orthogonal delivery-pattern family. See
+     <a href="../../docs/decision-guide.md"><code>decision-guide.md</code></a>.</p>
+
+  <p class="foot">
+     This page is the <strong>why &amp; what</strong>. The <strong>how</strong> is the terminal
+     walk-through &mdash; open <a href="deck.html"><code>deck.html</code></a>. Full catalog:
+     <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">legacy-secrets-adapters</a>.
+  </p>
+  <p class="foot">Can't run the demo locally? Try our <a href="deck.html">walkthrough</a>.</p>
+</main>
+</body>
+</html>

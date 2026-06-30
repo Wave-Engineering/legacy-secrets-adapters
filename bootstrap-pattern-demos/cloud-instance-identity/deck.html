@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Instance Identity — a walkthrough</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3;
+         font: 18px/1.6 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column; justify-content: flex-start;
+           gap: 1rem; max-width: 940px; margin: 0 auto; padding: 2.5rem 2rem 5rem; overflow-y: auto; }
+  .slide.active { display: flex; }
+  .slide.cover { justify-content: center; }
+  .slide-title { margin: 0 0 .5rem; font-size: 1.5rem; color: #7ee787; font-weight: 700; }
+  .beat { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; }
+  .beat.show { opacity: 1; transform: none; }
+  .say { color: #b9c2cc; margin: .2rem 0; }
+  .prose { color: #c9d1d9; margin: .4rem 0; font-size: 1.12rem; }
+  .title { text-align: center; }
+  .title h1 { font-size: 3rem; margin: 0 0 .4rem; line-height: 1.1; }
+  .tagline { font-size: 1.35rem; color: #7ee787; margin: 0; }
+  .kicker { color: #8b949e; font-family: "SF Mono", Consolas, monospace; margin-top: 1.2rem; }
+  .term { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: .8rem 1rem;
+          font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; font-size: .92rem; margin: .3rem 0; }
+  .promptline { white-space: pre-wrap; word-break: break-all; }
+  .prompt { color: #7ee787; } .cmd { color: #e6edf3; }
+  .term pre.out { margin: .5rem 0 0; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; }
+  .verdict { font-weight: 700; margin: .4rem 0; }
+  .verdict.ok { color: #7ee787; } .verdict.fail { color: #ff7b72; }
+  a { color: #58a6ff; } code { font-family: "SF Mono", Consolas, monospace; color: #a5d6ff; }
+  .hud { position: fixed; bottom: 1rem; left: 0; right: 0; display: flex; justify-content: center;
+         gap: 1rem; align-items: center; color: #8b949e; font-size: .8rem; }
+  .hud .bar { width: 180px; height: 4px; background: #21262d; border-radius: 2px; overflow: hidden; }
+  .hud .bar > i { display: block; height: 100%; background: #7ee787; transition: width .3s ease; }
+  kbd { background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 0 .35rem; }
+</style>
+</head>
+<body>
+<section class="slide cover"><div class="beat title"><h1>Cloud Instance Identity</h1><p class="tagline">the machine already has an identity — use it as the bootstrap credential</p><p class="kicker">legacy-secrets-adapters - a walkthrough</p></div></section>
+<section class="slide"><h2 class="slide-title">The problem</h2><div class="beat"><p class="prose">Every secret-delivery pattern (Cone of Silence, Dynamic Credential Shim) needs a BOOTSTRAP credential to authenticate to its key source. But where does THAT credential come from? If you store it on disk, you've just moved the problem. The turtles-to-silicon regress has to end somewhere.</p></div><div class="beat"><p class="prose">On a cloud instance, it already has: the machine's identity IS the credential. The cloud provider's control plane assigned it an IAM role when it launched. The metadata endpoint hands out short-lived tokens that prove 'I am this instance'. No stored secret required.</p></div></section>
+<section class="slide"><h2 class="slide-title">The IMDSv2 flow</h2><div class="beat"><p class="say">AWS Instance Metadata Service v2 uses a two-step flow to prevent SSRF attacks:<br>Step 1: PUT to get a session token (requires the TTL header).<br>Step 2: GET with that token to retrieve credentials.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd">curl -s -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' http://169.254.169.254/latest/api/token</span></div><pre class="out">a4b2c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7</pre></div></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd">curl -s -H 'X-aws-ec2-metadata-token: &lt;token&gt;' http://169.254.169.254/latest/meta-data/iam/security-credentials/demo-instance-role</span></div><pre class="out">{
+  "Code": "Success",
+  "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+  "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  "Token": "FwoGZXIvYXdzE-session-token-0001",
+  "Expiration": "2026-01-01T10:00:00Z"
+}</pre></div></div><div class="beat"><p class="say">The session token and the STS credentials are both short-lived.<br>No stored secret — just a conversation with the hypervisor.</p></div></section>
+<section class="slide"><h2 class="slide-title">Authenticate to OpenBao</h2><div class="beat"><p class="say">The materializer uses the AWS credentials to authenticate to OpenBao<br>via the AWS auth method. OpenBao verifies the identity with STS and<br>returns a Vault token scoped to the instance's policy.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd">./materializer.py</span></div><pre class="out">[materializer] requesting IMDSv2 session token ...
+[materializer] got session token; fetching instance credentials ...
+[materializer] got credentials for role (AccessKeyId=AKIAIОСF...)
+[materializer] authenticating to OpenBao via AWS auth method ...
+[materializer] authenticated (token=hvs.CAES...)
+[materializer] reading secret from secret/data/demo/db-password ...
+[materializer] got secret; writing to run/secret.json ...
+[materializer] done - secret materialized to run/secret.json (mode 0600)</pre></div></div><div class="beat"><p class="verdict ok">Authenticated and fetched secret — no stored bootstrap credential used.</p></div></section>
+<section class="slide"><h2 class="slide-title">No secrets on disk</h2><div class="beat"><p class="say">The only file written is the delivery output (the secret itself).<br>No Vault tokens, no AWS credentials, no session tokens on disk.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd">cat run/secret.json</span></div><pre class="out">{
+  "password": "S3cr3t-Pg-Pass",
+  "username": "app_user"
+}</pre></div></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd">grep -r 'dev-only-root-token\|hvs\.' run/ || echo '(none found)'</span></div><pre class="out">(none found)</pre></div></div><div class="beat"><p class="verdict ok">Only the delivery payload is on disk. Auth tokens stayed in memory.</p></div></section>
+<section class="slide"><h2 class="slide-title">Token rotation is built-in</h2><div class="beat"><p class="say">Each call to the metadata endpoint returns fresh, short-lived credentials.<br>The cloud control plane handles rotation — no cron job, no lease renewal.</p></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd"># call 1</span></div><pre class="out">Token: "FwoGZXIvYXdzE-session-token-0001"</pre></div></div><div class="beat"><div class="term"><div class="promptline"><span class="prompt">[you@instance cloud-instance-identity]$ </span><span class="cmd"># call 2</span></div><pre class="out">Token: "FwoGZXIvYXdzE-session-token-0002"</pre></div></div><div class="beat"><p class="verdict ok">Fresh credentials every time. Rotation is the cloud's native model.</p></div></section>
+<section class="slide"><h2 class="slide-title">The takeaway</h2><div class="beat"><p class="prose">The bootstrap-secret problem — 'what authenticates the authenticator?' — ends at a root of trust the file-thief cannot reach. On a cloud instance, that root is the provider's control plane: the machine's identity IS the credential, assigned at launch, unreachable from outside.</p></div><div class="beat"><p class="prose">No file to steal, no token to rotate, no secret to seal. The instance metadata endpoint is the trust anchor — backed by the hypervisor, scoped to this machine, short-lived by design.</p></div><div class="beat"><p class="prose"><strong>Delivery pattern - out of scope.</strong> This demo anchors the bootstrap credential (cloud instance identity); what <em>consumes</em> it - a delivery pattern that materializes the secret to an unchanged app - is an orthogonal concern (the delivery-pattern family). Why &amp; what: <code>enlighten.html</code> &middot; <a href="https://github.com/Wave-Engineering/legacy-secrets-adapters">the catalog</a>.</p></div></section>
+<div class="hud">
+  <span id="counter">1 / 1</span>
+  <span class="bar"><i id="prog"></i></span>
+  <span><kbd>←</kbd> <kbd>→</kbd> / click to navigate</span>
+</div>
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let si = 0;
+  const beats = s => [...s.querySelectorAll('.beat')];
+  const shownCount = s => beats(s).filter(b => b.classList.contains('show')).length;
+
+  function hud() {
+    document.getElementById('counter').textContent = (si + 1) + ' / ' + slides.length;
+    document.getElementById('prog').style.width = ((si + 1) / slides.length * 100) + '%';
+  }
+  function enter(i, revealAll) {
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    si = i;
+    const bs = beats(slides[i]);
+    bs.forEach(b => b.classList.remove('show'));
+    if (revealAll) bs.forEach(b => b.classList.add('show'));
+    else if (bs.length) bs[0].classList.add('show');
+    slides[i].scrollTop = 0;
+    hud();
+  }
+  function next() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown < bs.length) { bs[shown].classList.add('show'); bs[shown].scrollIntoView({block: 'nearest'}); }
+    else if (si < slides.length - 1) enter(si + 1, false);
+  }
+  function prev() {
+    const bs = beats(slides[si]), shown = shownCount(slides[si]);
+    if (shown > 1) { bs[shown - 1].classList.remove('show'); if (shown - 2 >= 0) bs[shown - 2].scrollIntoView({block: 'nearest'}); }
+    else if (si > 0) enter(si - 1, true);
+  }
+  addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') enter(0, false);
+    else if (e.key === 'End') enter(slides.length - 1, true);
+  });
+  addEventListener('click', e => { if (!e.target.closest('a')) next(); });
+  enter(0, false);
+</script>
+</body>
+</html>
