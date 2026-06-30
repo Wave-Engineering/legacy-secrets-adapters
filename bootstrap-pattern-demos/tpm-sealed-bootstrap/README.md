@@ -2,6 +2,12 @@
 
 *Seal the materializer's bootstrap credential to the machine's TPM2 PCR state — the regress ends at silicon.*
 
+The strongest hardware-bound bootstrap: the credential is sealed to the machine's TPM2 Platform
+Configuration Registers — only this specific hardware in this specific firmware/kernel state can
+unseal it. A stolen disk, a cloned image, or a tampered boot chain all produce a dead credential.
+The turtles-to-silicon regress ends here. Requires TPM2 hardware (physical or vTPM) and
+systemd >= 250; no cross-machine portability, and a firmware update requires a deliberate reseal.
+
 ## Context — when you're here
 
 - A materializer (shim, sidecar, agent) needs a credential to authenticate to its key source

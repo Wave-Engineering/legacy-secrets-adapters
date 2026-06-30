@@ -2,6 +2,13 @@
 
 *Deliver the materializer's bootstrap credential as a single-use response-wrapped token — replay-proof, time-limited, no stored secret on disk.*
 
+The software-only bootstrap for environments with a deployment pipeline but no cloud identity or
+TPM. At deploy time, Ansible/CI wraps a Vault token in a response-wrapping envelope and delivers
+it to the target. The envelope is single-use (consumed on unwrap), time-limited (dead after its
+TTL), and replay-proof — even an intercepted token is worthless once the real consumer unwraps
+it first. Useless without a trusted delivery channel; if you have no pipeline that can reach the
+target at deploy time, look at TPM-sealed or cloud-instance-identity instead.
+
 ## Context — when you're here
 
 - A materializer needs to authenticate to its key source (OpenBao/Vault) **without a stored

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legacy Secrets Adapters — Pattern Catalog</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="nav-section">
+    <h2>Delivery &amp; Lifecycle</h2>
+    <a href="#" data-pattern="delivery/fifo-stream" class="active">FIFO Stream</a>
+    <a href="#" data-pattern="delivery/cone-of-silence">Cone of Silence</a>
+    <a href="#" data-pattern="delivery/dynamic-credential-shim">Dynamic Credential Shim</a>
+    <a href="#" data-pattern="delivery/broker-sidecar">Broker Sidecar</a>
+    <a href="#" data-pattern="delivery/fuse-decrypt">FUSE Decrypt</a>
+  </div>
+  <div class="nav-section">
+    <h2>Bootstrap Secret</h2>
+    <a href="#" data-pattern="bootstrap/cloud-instance-identity">Cloud Instance Identity</a>
+    <a href="#" data-pattern="bootstrap/approle-response-wrapping">AppRole Response-Wrapping</a>
+    <a href="#" data-pattern="bootstrap/tpm-sealed-bootstrap">TPM-Sealed Bootstrap</a>
+  </div>
+</nav>
+
+<header class="header">
+  <div style="display:flex;align-items:center;gap:.6rem">
+    <button class="nav-toggle-btn" id="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+    <h1>legacy-secrets-adapters <span>pattern catalog</span></h1>
+  </div>
+  <div class="toggle" id="toggle">
+    <button class="active" data-view="enlighten">Enlighten</button>
+    <button data-view="deck">Walkthrough</button>
+  </div>
+</header>
+
+<main class="content">
+  <iframe id="frame" src="delivery/fifo-stream/enlighten.html" title="Pattern content"></iframe>
+</main>
+
+<script>
+(function () {
+  var nav = document.getElementById('nav');
+  var frame = document.getElementById('frame');
+  var toggle = document.getElementById('toggle');
+  var navToggle = document.getElementById('nav-toggle');
+  var links = nav.querySelectorAll('a[data-pattern]');
+  var buttons = toggle.querySelectorAll('button');
+
+  var currentPattern = 'delivery/fifo-stream';
+  var currentView = 'enlighten';
+
+  function load() {
+    var file = currentView === 'enlighten' ? 'enlighten.html' : 'deck.html';
+    frame.src = currentPattern + '/' + file;
+  }
+
+  links.forEach(function (link) {
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      links.forEach(function (l) { l.classList.remove('active'); });
+      link.classList.add('active');
+      currentPattern = link.dataset.pattern;
+      load();
+      if (nav.classList.contains('open')) nav.classList.remove('open');
+    });
+  });
+
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      buttons.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentView = btn.dataset.view;
+      load();
+    });
+  });
+
+  navToggle.addEventListener('click', function () {
+    nav.classList.toggle('open');
+  });
+})();
+</script>
+</body>
+</html>
