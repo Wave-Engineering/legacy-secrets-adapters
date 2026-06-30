@@ -181,6 +181,8 @@ def wrap_and_deliver():
     global last_token
     if not _stack_up():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
+    if not _have("ansible-playbook"):
+        print(RED("    ansible-playbook not found — install it: pip install ansible-core")); return
 
     coach("[deployer] Running the Ansible playbook to wrap a SecretID and deliver it\n"
           "to run/wrapped-token. The wrapping token is single-use, TTL=30s:")
