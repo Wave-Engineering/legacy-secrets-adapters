@@ -144,7 +144,32 @@ done = {"up": False, "seeded": False, "rendered": False, "rotated": False}
 def _stack_up() -> bool:
     r = subprocess.run(["docker", "compose", "ps", "--status=running", "-q"],
                        cwd=HERE, capture_output=True, text=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    try:
+        url = f"{BAO_ADDR}/v1/sys/health"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=2):
+            return True
+    except (urllib.error.URLError, OSError):
+        return False
+
+def _wait_stack(timeout=30) -> bool:
+    if _stack_up():
+        return True
+    r = subprocess.run(["docker", "compose", "ps", "-q"],
+                       cwd=HERE, capture_output=True, text=True)
+    if not r.stdout.strip():
+        return False
+    print(DIM("    waiting for OpenBao to be ready ..."), end="", flush=True)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _stack_up():
+            print(GREEN(" ready"))
+            return True
+        time.sleep(0.5)
+    print(RED(" timed out"))
+    return False
 
 def _all_done() -> bool:
     return done["rendered"] and done["rotated"]
@@ -170,7 +195,7 @@ def bring_up():
     done["seeded"] = True
 
 def fetch_and_render():
-    if not _stack_up():
+    if not _wait_stack():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
     coach("The broker fetches the secret from OpenBao KV v2, renders it through the\n"
           "Jinja2 template (templates/db.conf.j2), and writes the result to run/db.conf:")
@@ -181,7 +206,7 @@ def fetch_and_render():
     run_reader()
 
 def rotate_and_rerender():
-    if not _stack_up():
+    if not _wait_stack():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
     coach("Force secret rotation: write a new version of the secret to KV v2.")
     bao_request("POST", f"{KV_MOUNT}/data/{KV_PATH}", {"data": ROTATED_SECRET})

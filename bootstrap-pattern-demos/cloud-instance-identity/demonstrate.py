@@ -135,7 +135,32 @@ mock_server = None
 def _stack_up() -> bool:
     r = subprocess.run(["docker", "compose", "ps", "--status=running", "-q"],
                        cwd=HERE, capture_output=True, text=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    try:
+        req = Request(f"{BAO_ADDR}/v1/sys/health")
+        with urlopen(req, timeout=2):
+            return True
+    except (URLError, OSError):
+        return False
+
+
+def _wait_stack(timeout=30) -> bool:
+    if _stack_up():
+        return True
+    r = subprocess.run(["docker", "compose", "ps", "-q"],
+                       cwd=HERE, capture_output=True, text=True)
+    if not r.stdout.strip():
+        return False
+    print(DIM("    waiting for OpenBao to be ready ..."), end="", flush=True)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _stack_up():
+            print(GREEN(" ready"))
+            return True
+        time.sleep(0.5)
+    print(RED(" timed out"))
+    return False
 
 
 def _all_done() -> bool:
@@ -175,7 +200,7 @@ def bring_up():
 
 
 def show_metadata():
-    if not done["up"]:
+    if not _wait_stack():
         print(RED("    Stack isn't up yet - choose 1 first.")); return
     coach("The IMDSv2 flow: PUT to get a session token, then GET with that token.\n"
           "This is what the hypervisor provides at 169.254.169.254 — no stored secret needed.\n"
@@ -195,7 +220,7 @@ def show_metadata():
 
 
 def run_materializer():
-    if not done["up"]:
+    if not _wait_stack():
         print(RED("    Stack isn't up yet - choose 1 first.")); return
     coach("The materializer uses the instance credentials to authenticate to OpenBao,\n"
           "fetches the secret, and writes it to disk — all without a stored bootstrap secret.")
@@ -235,7 +260,7 @@ def run_materializer():
 
 
 def show_rotation():
-    if not done["up"]:
+    if not _wait_stack():
         print(RED("    Stack isn't up yet - choose 1 first.")); return
     coach("Each call to the metadata endpoint returns fresh, short-lived credentials.\n"
           "The old session token expires; a new one is issued. This is rotation\n"

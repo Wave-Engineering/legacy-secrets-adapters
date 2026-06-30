@@ -127,7 +127,32 @@ last_token = None
 def _stack_up() -> bool:
     r = subprocess.run(["docker", "compose", "ps", "--status=running", "-q"],
                        cwd=HERE, capture_output=True, text=True)
-    return bool(r.stdout.strip())
+    if not r.stdout.strip():
+        return False
+    try:
+        req = urllib.request.Request(f"{BAO_ADDR}/v1/sys/health")
+        with urllib.request.urlopen(req, timeout=2):
+            return True
+    except (urllib.error.URLError, OSError):
+        return False
+
+def _wait_stack(timeout=30) -> bool:
+    """Block until OpenBao is healthy, or timeout. Returns True if ready."""
+    if _stack_up():
+        return True
+    r = subprocess.run(["docker", "compose", "ps", "-q"],
+                       cwd=HERE, capture_output=True, text=True)
+    if not r.stdout.strip():
+        return False
+    print(DIM("    waiting for OpenBao to be ready ..."), end="", flush=True)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _stack_up():
+            print(GREEN(" ready"))
+            return True
+        time.sleep(0.5)
+    print(RED(" timed out"))
+    return False
 
 def _all_done() -> bool:
     return done["wrap"] and done["replay"]
@@ -179,7 +204,7 @@ def bring_up():
 
 def wrap_and_deliver():
     global last_token
-    if not _stack_up():
+    if not _wait_stack():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
     if not _have("ansible-playbook"):
         print(RED("    ansible-playbook not found — install it: pip install ansible-core")); return
@@ -203,7 +228,7 @@ def wrap_and_deliver():
 
 def replay_and_expire():
     global last_token
-    if not _stack_up():
+    if not _wait_stack():
         print(RED("    Stack isn't up yet — choose 1 first.")); return
     if not last_token:
         print(RED("    No wrapping token to replay — choose 2 first.")); return
