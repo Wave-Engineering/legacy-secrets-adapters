@@ -72,6 +72,16 @@ def coach(text):
 def verdict(text, ok=True):
     print("\n    " + (GREEN if ok else RED)(text))
 
+CURSOR = "\033[7m \033[0m" if TTY else ""
+
+def shell(cmd):
+    print()
+    print(f"    $ {cmd}" + CURSOR, end="", flush=True)
+    _enter()
+    if not TTY:
+        print()
+    subprocess.run(cmd, shell=True, cwd=HERE)
+
 
 def bao_request(method: str, path: str, data: dict = None) -> dict:
     """Make an HTTP request to the OpenBao API."""
@@ -144,7 +154,9 @@ def bring_up():
     coach("Bring up OpenBao (dev mode) and seed the initial secret into KV v2.\n"
           "The broker will later fetch from this path and render it through a template.")
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
-    subprocess.run(["docker", "compose", "up", "-d"], cwd=HERE)
+    coach("First, let's see what we're about to run:")
+    shell("cat docker-compose.yml")
+    shell("docker compose up -d")
     print()
     coach("Waiting for OpenBao to be ready ...")
     if not wait_for_openbao():

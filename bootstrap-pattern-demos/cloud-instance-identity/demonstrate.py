@@ -148,6 +148,8 @@ def bring_up():
     coach("Bring up OpenBao (dev mode) + start the mock IMDSv2 metadata service.\n"
           "This simulates an EC2 instance with an IAM role attached.")
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
+    coach("First, let's see what we're about to run:")
+    shell("cat docker-compose.yml")
     shell("docker compose up -d")
     print(DIM("    waiting for OpenBao ..."))
     _wait_for_bao()

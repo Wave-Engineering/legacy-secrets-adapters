@@ -1,10 +1,32 @@
-# OpenBao dev-mode — the authentication target for the materializer.
+# -------------------------------------------------------------------
+# OpenBao dev server for the TPM-Sealed Bootstrap demo.
 #
-# The dev root token is an OBVIOUS dev value (the bootstrap secret this demo
-# replaces with TPM-sealed silicon). Non-default port (58300) to avoid collisions.
+# What this does:
+#   - Runs a SINGLE OpenBao container in dev mode (in-memory storage,
+#     auto-unsealed, no TLS — never do this in production).
+#   - The dev root token "dev-only-root-token" is the BOOTSTRAP SECRET
+#     this entire pattern exists to replace. In production, the
+#     materializer authenticates using a TPM-sealed credential — no
+#     static token stored anywhere. Here we use the static token for
+#     initial OpenBao configuration only.
+#   - Host port 58300 (non-default) avoids collisions with other demos.
+#
+# Why dev mode:
+#   - No manual unseal ceremony (would obscure the TPM bootstrap lesson).
+#   - In-memory backend means `docker compose down -v` is a full reset.
+#   - The demo configures a KV secret and policy at runtime (see
+#     demonstrate.py bring_up) that the materializer then fetches after
+#     authenticating via the TPM-sealed flow.
+# -------------------------------------------------------------------
 services:
   openbao:
     image: openbao/openbao:2.5.0
-    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
-    cap_add: ["IPC_LOCK"]
-    ports: ["58300:8200"]
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=dev-only-root-token   # the bootstrap secret TPM replaces
+      - -dev-listen-address=0.0.0.0:8200         # listen on all interfaces inside the container
+    cap_add:
+      - IPC_LOCK                                 # prevent swapping secrets to disk (mlock)
+    ports:
+      - "58300:8200"                             # host:container — access via localhost:58300

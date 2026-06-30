@@ -1,15 +1,34 @@
-# Real OpenBao + Postgres for the dynamic-credential-shim demo.
+# -------------------------------------------------------------------
+# OpenBao + Postgres for the Dynamic Credential Shim demo.
 #
-# BOTH secrets here are OBVIOUS dev values and are the demo's BOOTSTRAP SECRETS —
-# how you'd really anchor them is out of scope (see README "Bootstrap secret — out of scope").
-# Non-default host ports (55432 / 58200) so this never collides with a local PG/OpenBao.
+# What this does:
+#   - Runs Postgres 16 (the database the legacy app connects to) and
+#     OpenBao in dev mode (the credential manager that owns and rotates
+#     the app's database password).
+#   - BOTH secrets here are OBVIOUS dev values — they are the demo's
+#     BOOTSTRAP SECRETS. How you'd really anchor them in production is
+#     out of scope (see README "Bootstrap secret — out of scope").
+#   - Non-default host ports (55432/58200) avoid collisions with local
+#     Postgres or OpenBao instances.
+#
+# Startup order:
+#   - Postgres starts first (healthcheck: pg_isready).
+#   - OpenBao starts after Postgres is healthy, because setup.sh will
+#     configure the database secrets engine to talk to Postgres.
+#
+# After `docker compose up -d`, run `./setup.sh` to:
+#   1. Enable the database secrets engine in OpenBao
+#   2. Configure the Postgres connection
+#   3. Create a static role (app_pg_user) that OpenBao rotates
+# -------------------------------------------------------------------
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: bootstrap-only-pg-superpw   # bootstrap secret (obvious dev value)
-      POSTGRES_DB: appdb
-    ports: ["55432:5432"]
+      POSTGRES_DB: appdb                             # the database the legacy app connects to
+    ports:
+      - "55432:5432"                                 # host:container — psql via localhost:55432
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
       interval: 2s
@@ -18,9 +37,15 @@ services:
 
   openbao:
     image: openbao/openbao:2.5.0
-    command: ["server", "-dev", "-dev-root-token-id=dev-only-root-token", "-dev-listen-address=0.0.0.0:8200"]
-    cap_add: ["IPC_LOCK"]
-    ports: ["58200:8200"]
+    command:
+      - server
+      - -dev
+      - -dev-root-token-id=dev-only-root-token   # bootstrap secret (obvious dev value)
+      - -dev-listen-address=0.0.0.0:8200         # listen on all interfaces inside the container
+    cap_add:
+      - IPC_LOCK                                 # prevent swapping secrets to disk (mlock)
+    ports:
+      - "58200:8200"                             # host:container — bao CLI via localhost:58200
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_healthy                # wait for PG before starting OpenBao

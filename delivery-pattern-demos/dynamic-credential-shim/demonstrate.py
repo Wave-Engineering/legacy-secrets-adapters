@@ -111,6 +111,8 @@ def bring_up():
           "engine and a STATIC role — OpenBao now owns and rotates app_pg_user's password.")
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE,
                    capture_output=True)  # fresh stack each time (setup's rotate-root isn't idempotent)
+    coach("First, let's see what we're about to run:")
+    shell("cat docker-compose.yml")
     shell("docker compose up -d")
     shell("./setup.sh")
     done["up"] = True

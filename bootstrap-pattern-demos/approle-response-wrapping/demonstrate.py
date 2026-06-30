@@ -111,8 +111,11 @@ def bao_request(path, method="GET", data=None, token=None, wrap_ttl=None):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+            raw = resp.read()
+            return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
+        if e.code == 204:
+            return {}
         error_body = e.read().decode() if e.fp else ""
         raise RuntimeError(f"HTTP {e.code}: {error_body}") from e
 
@@ -134,6 +137,8 @@ def bring_up():
     coach("[deployer] Bring up REAL OpenBao (dev mode), configure AppRole auth,\n"
           "create a demo policy + secret, and fetch the RoleID.")
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
+    coach("First, let's see what we're about to run:")
+    shell("cat docker-compose.yml")
     shell("docker compose up -d")
     # Wait for OpenBao
     print(DIM("    waiting for OpenBao ..."), end="", flush=True)

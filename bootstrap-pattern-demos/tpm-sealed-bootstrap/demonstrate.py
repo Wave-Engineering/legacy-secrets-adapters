@@ -234,6 +234,8 @@ def action_authenticate():
         return
 
     subprocess.run(["docker", "compose", "down", "-v"], cwd=HERE, capture_output=True)
+    coach("First, let's see what we're about to run:")
+    shell("cat docker-compose.yml")
     shell("docker compose up -d")
 
     # Wait for OpenBao
