@@ -359,6 +359,14 @@ def main():
     if not preflight_ok():
         return
 
+    if os.geteuid() != 0:
+        print()
+        print(DIM("    NOTE: you are not running as root. TPM operations (systemd-creds)"))
+        print(DIM("    typically require root/sudo to access /dev/tpmrm0."))
+        print(DIM("    If you hit 'Permission denied', re-run: sudo ./demonstrate.py"))
+        print()
+        pause("Press [enter] to continue anyway, or Ctrl-C to exit ...")
+
     actions = {"0": action_enlighten, "1": action_seal, "2": action_unseal,
                "3": action_authenticate, "4": action_tamper, "5": action_teardown}
     try:
