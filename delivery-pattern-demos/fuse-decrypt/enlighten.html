@@ -66,6 +66,7 @@
     <a href="#idea">The idea</a>
     <a href="#spectrum">Power spectrum</a>
     <a href="#tradeoffs">Tradeoffs</a>
+    <a href="#honest">When NOT to use</a>
     <a href="#hardening">Production</a>
     <a href="#related">Related</a>
     <a href="deck.html">the walkthrough (how)</a>
@@ -162,6 +163,40 @@
         <li><strong>Environment-sensitive:</strong> requires <code>/dev/fuse</code>, kernel FUSE module, <code>libfuse3</code> &mdash; not available in all containers/VMs</li>
       </ul>
     </div>
+  </div>
+
+  <h2 id="honest">Honest positioning: when NOT to use this</h2>
+  <div class="card con" style="margin:1rem 0;">
+    <h3>The LUKS question</h3>
+    <p style="font-size:.9rem; color:#c9d1d9;">If the host already has full-disk encryption
+       (LUKS, dm-crypt, BitLocker), FUSE-decrypt gives you <strong>the same security boundary
+       at worse performance</strong>. Both protect against stolen media. Neither protects against
+       a process that can read the plaintext view. FUSE-decrypt is a slower, narrower, userspace
+       reimplementation of the same property &mdash; unless you need per-file key granularity or
+       are in an environment without block-device access.</p>
+  </div>
+  <div class="card con" style="margin:1rem 0;">
+    <h3>The co-located process problem</h3>
+    <p style="font-size:.9rem; color:#c9d1d9;">A transparent filesystem <em>sounds</em> like total
+       coverage. In reality it is the <strong>thinnest</strong> protection in this catalog: any
+       process on the box with mount-point access reads plaintext. Compare:</p>
+    <ul style="font-size:.9rem; padding-left:1.2rem; color:#c9d1d9;">
+      <li><strong>fifo-stream</strong> &mdash; secret never hits disk at all (strictly stronger)</li>
+      <li><strong>broker-sidecar</strong> &mdash; credential rotates, so a leak has a shelf life</li>
+      <li><strong>dynamic-credential-shim</strong> &mdash; credential is ephemeral by design</li>
+      <li><strong>cone-of-silence</strong> &mdash; prevents exfiltration even from a compromised process</li>
+    </ul>
+    <p style="font-size:.9rem; color:#c9d1d9;">FUSE-decrypt only wins against &ldquo;stolen disk&rdquo;
+       &mdash; and LUKS already covers that for most deployments.</p>
+  </div>
+  <div class="card pro" style="margin:1rem 0;">
+    <h3>When it genuinely earns its place</h3>
+    <ul style="font-size:.9rem; padding-left:1.2rem; color:#c9d1d9;">
+      <li>Per-file key separation (different secrets, different keys, different access policies)</li>
+      <li>Rootless containers / shared hosting / PaaS without block-device access (no LUKS available)</li>
+      <li>Audit logging per-file-access at the FUSE layer (who opened what, when)</li>
+      <li>The app requires full POSIX I/O (seek/write/re-read) AND fifo-stream won&rsquo;t work</li>
+    </ul>
   </div>
 
   <h2 id="hardening">Production hardening</h2>

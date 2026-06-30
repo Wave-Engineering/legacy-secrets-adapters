@@ -193,7 +193,7 @@ def act_read_through_mount():
 
 
 def act_detect():
-    """Hunt the disk for plaintext."""
+    """Hunt the disk for plaintext — then show what a co-located process sees."""
     coach(f"Searching the cipherstore for the password '{NEEDLE}'...")
     ct_file = SOURCE_DIR / SECRET_FILE_NAME
     if ct_file.exists():
@@ -204,10 +204,31 @@ def act_detect():
             verdict("LEAK: plaintext found on disk.", ok=False)
         else:
             print(DIM(f"    grep '{NEEDLE}' cipherstore/{ct_file.name} -> (not found)"))
-            coach("The file is pure ciphertext. Only through the FUSE mount is it readable.")
-            verdict("Ciphertext only on disk. The FUSE layer is the sole gate to plaintext.", ok=True)
+            verdict("Ciphertext only on disk.", ok=True)
     else:
         print(DIM("    (no cipherstore files yet — mount first)"))
+        return
+
+    # Now show the threat model's blind spot
+    mt_file = MOUNT_POINT / SECRET_FILE_NAME
+    if is_mounted() and mt_file.exists():
+        coach("But what does a co-located process see through the mount?")
+        print(DIM(f"    grep '{NEEDLE}' mnt/{SECRET_FILE_NAME}"))
+        content = mt_file.read_text()
+        if NEEDLE in content:
+            for line in content.splitlines():
+                if NEEDLE in line:
+                    print(RED(f"    {line.strip()}"))
+                else:
+                    print(DIM(f"    {line.strip()}"))
+            verdict(
+                "ANY process that can reach the mount reads plaintext.\n"
+                "    FUSE protects at-rest (stolen disk/backup). It does NOT protect\n"
+                "    against a co-located attacker with mount-point access.\n"
+                "    If you already have LUKS, this buys you nothing extra.",
+                ok=False)
+        else:
+            print(DIM(f"    ('{NEEDLE}' not found through mount — unexpected)"))
 
 
 def act_hexdump():
@@ -256,7 +277,7 @@ def menu(mounted: bool):
     print("  1) Mount the FUSE filesystem   " + DIM("(ciphertext -> plaintext view)"))
     print("  2) Unmount                     " + DIM("(plaintext view disappears)"))
     print("  3) Run the legacy reader       " + DIM("(seek + write-back through mount)"))
-    print("  4) Detect plaintext on disk    " + DIM("(grep the cipherstore)"))
+    print("  4) Detect plaintext on disk    " + DIM("(grep cipherstore vs mount — threat model)"))
     print("  5) Hexdump backing file        " + DIM("(see the raw ciphertext)"))
     print("  6) Exit")
     print()
